@@ -28,8 +28,9 @@ namespace Oxide.Plugins
         {
             return new PluginConfig
             {
-                GuardAggressionRange = 100f,
-                GuardVisionRange     = 100f,
+                GuardAggressionRange = 201f,
+                GuardDeaggroRange    = 202f,
+                GuardVisionRange     = 203f,
                 GuardDamageScale     = 0.2f,
                 GuardKit             = "guard"
             };
@@ -37,7 +38,8 @@ namespace Oxide.Plugins
 
         public class PluginConfig
         {
-            public float GuardAggressionRange;            
+            public float GuardAggressionRange;   
+            public float GuardDeaggroRange;
             public float GuardVisionRange;
             public float GuardDamageScale;
             public string GuardKit;
@@ -203,11 +205,14 @@ namespace Oxide.Plugins
 
                 npc.RadioEffect           = new GameObjectRef();
                 npc.DeathEffect           = new GameObjectRef();
-                npc.Stats.AggressionRange = ins.config.GuardAggressionRange;
-                npc.Stats.VisionRange     = ins.config.GuardVisionRange;
-                npc.Stats.Hostility       = 1f;
                 npc.SpawnPosition         = desPos;
                 npc.Destination           = desPos;
+                npc.Stats.AggressionRange = ins.config.GuardAggressionRange;
+                npc.Stats.VisionRange     = ins.config.GuardVisionRange;
+                npc.Stats.DeaggroRange    = ins.config.GuardDeaggroRange;
+                npc.Stats.Hostility       = 1f;
+                npc.InitFacts();
+                
                 npc.inventory.Strip();
 
                 Interface.Oxide.CallHook("GiveKit", npc, ins.config.GuardKit);
@@ -228,7 +233,6 @@ namespace Oxide.Plugins
             void ShouldRelocate()
             {
                 float distance = Vector3.Distance(npc.transform.position, desPos);
-
                 if (!goingHome && distance >= roamRadius)
                 {
                     goingHome = true;
