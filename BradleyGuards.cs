@@ -18,6 +18,7 @@ namespace Oxide.Plugins
         private CH47LandingZone LandingZone;
         private Vector3 LandingZonePos;
         private Vector3 EventPos;
+        private bool HasLaunch = false;
         private static BradleyGuards ins;
 
         #region Config
@@ -29,6 +30,7 @@ namespace Oxide.Plugins
             {
                 GuardAggressionRange = 100f,
                 GuardVisionRange     = 100f,
+                GuardDamageScale     = 0.2f,
                 GuardKit             = "guard"
             };
         }
@@ -37,6 +39,7 @@ namespace Oxide.Plugins
         {
             public float GuardAggressionRange;            
             public float GuardVisionRange;
+            public float GuardDamageScale;
             public string GuardKit;
         }
         #endregion
@@ -67,6 +70,7 @@ namespace Oxide.Plugins
         void OnEntitySpawned(BradleyAPC bradley)
         {
             if (bradley == null) return;
+
             ClearLandingZone();
             ClearGuards();
         }
@@ -78,6 +82,14 @@ namespace Oxide.Plugins
             StartEvent(bradley.transform.position);
 
             MessagePlayers("EventStart");
+        }
+
+        void OnEntityTakeDamage(BasePlayer player, HitInfo info)
+        {
+            if (info == null || info?.Initiator == null) return;
+            NPCPlayerApex npc = info.Initiator as NPCPlayerApex;
+            if (npc == null || !Guards.Contains(npc)) return;
+            info.damageTypes.ScaleAll(config.GuardDamageScale);
         }
 
         void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
@@ -94,6 +106,8 @@ namespace Oxide.Plugins
         #region Core
         void StartEvent(Vector3 eventPos)
         {
+            if (!HasLaunch) return;
+
             EventPos    = eventPos;
             LandingZone = CreateLandingZone();
 
@@ -161,9 +175,10 @@ namespace Oxide.Plugins
             foreach (MonumentInfo monumentInfo in monumentInfos)
             {
                 if (!monumentInfo.gameObject.name.Contains("launch_site_1")) continue;
-                Vector3 pos    = monumentInfo.transform.position + monumentInfo.transform.right * 130f;
+                Vector3 pos    = monumentInfo.transform.position + monumentInfo.transform.right * 125f;
                 pos.y          = pos.y + 5f;
                 LandingZonePos = pos;
+                HasLaunch      = true;
             };
         }
         #endregion
@@ -182,7 +197,7 @@ namespace Oxide.Plugins
                 if (npc == null)
                 {
                     Destroy(this);
-                    
+
                     return;
                 }
 
@@ -221,8 +236,6 @@ namespace Oxide.Plugins
 
                 if (goingHome && distance >= roamRadius)
                 {
-                    npc.CurrentBehaviour = BaseNpc.Behaviour.Wander;
-                    npc.SetFact(NPCPlayerApex.Facts.Speed, (byte)NPCPlayerApex.SpeedEnum.Walk, true, true);
                     npc.SetDestination(desPos);
                 }
                 else
