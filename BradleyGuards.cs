@@ -136,10 +136,7 @@ namespace Oxide.Plugins
             {
                 if (mountPoint.mountable == null || !mountPoint.mountable.IsMounted()) continue;
 
-                BasePlayer player = mountPoint.mountable.GetMounted();
-                if (player == null) continue;
-
-                NPCPlayerApex npc = player.GetComponent<NPCPlayerApex>();
+                NPCPlayerApex npc = mountPoint.mountable.GetMounted().GetComponent<NPCPlayerApex>();
                 if (npc == null || Guards.Contains(npc)) continue;
 
                 npc.gameObject.AddComponent<BradleyGuard>().desPos = EventPos + (UnityEngine.Random.onUnitSphere * 10);
@@ -263,3 +260,4 @@ namespace Oxide.Plugins
         #endregion
     }
 }
+
