@@ -13,6 +13,7 @@ namespace Oxide.Plugins
         [PluginReference] Plugin Kits;
 
         private const string ScientistPrefab = "assets/prefabs/npc/scientist/scientist.prefab";
+        private const string LockedPrefab    = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
         private const string CH47Prefab      = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
         private List<NPCPlayerApex> Guards   = new List<NPCPlayerApex>();
         private CH47LandingZone LandingZone;
@@ -32,6 +33,8 @@ namespace Oxide.Plugins
                 GuardDeaggroRange    = 202f,
                 GuardVisionRange     = 203f,
                 GuardDamageScale     = 0.2f,
+                GuardMaxSpawn        = 11,
+                GuardMaxRoam         = 10,
                 GuardKit             = "guard"
             };
         }
@@ -42,6 +45,8 @@ namespace Oxide.Plugins
             public float GuardDeaggroRange;
             public float GuardVisionRange;
             public float GuardDamageScale;
+            public int GuardMaxSpawn;
+            public int GuardMaxRoam;
             public string GuardKit;
         }
         #endregion
@@ -51,16 +56,19 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-               ["EventStart"] = "<color=#DC143C>Bradley</color>: Armed guards flying in, stay clear or fight for the loot.",
+               ["EventStart"] = "Bradley Event:\nGuards arriving, stay clear or fight for the loot.",
             }, this);
+        }
+
+        void OnServerInitialized()
+        {
+            SetupMonumentPos();
         }
 
         void Init()
         {
             config = Config.ReadObject<PluginConfig>();
             ins    = this;
-
-            SetupMonumentPos();
         }
 
         void Unload()
@@ -72,7 +80,6 @@ namespace Oxide.Plugins
         void OnEntitySpawned(BradleyAPC bradley)
         {
             if (bradley == null) return;
-
             ClearLandingZone();
             ClearGuards();
         }
@@ -80,10 +87,8 @@ namespace Oxide.Plugins
         void OnEntityKill(BradleyAPC bradley)
         {
             if (bradley == null) return;
-            
-            StartEvent(bradley.transform.position);
-
-            MessagePlayers("EventStart");
+            EventPos = bradley.transform.position;
+            StartEvent();
         }
 
         void OnEntityTakeDamage(BasePlayer player, HitInfo info)
@@ -106,21 +111,20 @@ namespace Oxide.Plugins
         #endregion
 
         #region Core
-        void StartEvent(Vector3 eventPos)
+        void StartEvent()
         {
             if (!HasLaunch) return;
 
-            EventPos    = eventPos;
             LandingZone = CreateLandingZone();
 
             CH47HelicopterAIController chinook = GameManager.server.CreateEntity(CH47Prefab, LandingZonePos + new Vector3(100f,200f,500f)) as CH47HelicopterAIController;
             if (chinook == null) return;
             chinook.SetLandingTarget(LandingZonePos);
-            chinook.hoverHeight = 0.1f;
+            chinook.hoverHeight = 5f;
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
 
-            for (int i = 0; i < 11; i++)
+            for (int i = 0; i < config.GuardMaxSpawn; i++)
             {
                 Vector3 passengerPos = chinook.transform.position + (chinook.transform.forward * 10f);
                 chinook.SpawnScientist(passengerPos);
@@ -134,22 +138,34 @@ namespace Oxide.Plugins
 
             foreach(BaseVehicle.MountPointInfo mountPoint in chinook.mountPoints)
             {
-                if (mountPoint.mountable == null || !mountPoint.mountable.IsMounted()) continue;
-
+                if (mountPoint.mountable == null) continue;
                 NPCPlayerApex npc = mountPoint.mountable.GetMounted().GetComponent<NPCPlayerApex>();
-                if (npc == null || Guards.Contains(npc)) continue;
-
-                npc.gameObject.AddComponent<BradleyGuard>().desPos = EventPos + (UnityEngine.Random.onUnitSphere * 10);
-
+                if (npc == null) continue;
                 Guards.Add(npc);
+                npc.gameObject.AddComponent<BradleyGuard>().desPos = EventPos + (UnityEngine.Random.onUnitSphere * 10);
             }
+
+            HackableCrate();
+
+            MessagePlayers("EventStart");
+        }
+
+        void HackableCrate()
+        {
+            HackableLockedCrate crate = GameManager.server.CreateEntity(LockedPrefab, EventPos + new Vector3(0f,5f,0f)) as HackableLockedCrate;
+            if (crate == null) return;
+            crate.Spawn();
+            crate.StartHacking();
 
             timer.Once(120f, () => ClearLandingZone());
         }
 
         CH47LandingZone CreateLandingZone()
         {
-            return new GameObject("helipad") { layer = 16, transform = { position = LandingZonePos }}.AddComponent<CH47LandingZone>();
+            return new GameObject("helipad") { 
+                layer     = 16, 
+                transform = { position = LandingZonePos }
+            }.AddComponent<CH47LandingZone>();
         }
 
         void ClearLandingZone()
@@ -170,8 +186,7 @@ namespace Oxide.Plugins
 
         void SetupMonumentPos()
         {
-            MonumentInfo[] monumentInfos = UnityEngine.Object.FindObjectsOfType<MonumentInfo>();
-            foreach (MonumentInfo monumentInfo in monumentInfos)
+            foreach (MonumentInfo monumentInfo in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
                 if (!monumentInfo.gameObject.name.Contains("launch_site_1")) continue;
                 Vector3 pos    = monumentInfo.transform.position + monumentInfo.transform.right * 125f;
@@ -196,7 +211,6 @@ namespace Oxide.Plugins
                 if (npc == null)
                 {
                     Destroy(this);
-
                     return;
                 }
 
@@ -207,9 +221,11 @@ namespace Oxide.Plugins
                 npc.Stats.AggressionRange = ins.config.GuardAggressionRange;
                 npc.Stats.VisionRange     = ins.config.GuardVisionRange;
                 npc.Stats.DeaggroRange    = ins.config.GuardDeaggroRange;
+                npc.Stats.LongRange       = 200f;
                 npc.Stats.Hostility       = 1f;
-                npc.InitFacts();
-                
+                npc.Stats.Defensiveness   = 1f;
+                npc.Stats.OnlyAggroMarkedTargets = false;
+                npc.InitFacts();                
                 npc.inventory.Strip();
 
                 Interface.Oxide.CallHook("GiveKit", npc, ins.config.GuardKit);
@@ -229,15 +245,16 @@ namespace Oxide.Plugins
 
             void ShouldRelocate()
             {
-                float distance = Vector3.Distance(npc.transform.position, desPos);
-                if (!goingHome && distance >= roamRadius)
+                var distance = Vector3.Distance(transform.position, desPos);
+                if (!goingHome && distance >= ins.config.GuardMaxRoam)
                 {
                     goingHome = true;
                 }
 
-                if (goingHome && distance >= roamRadius)
+                if (goingHome && distance >= ins.config.GuardMaxRoam)
                 {
-                    npc.SetDestination(desPos);
+                    npc.GetNavAgent.SetDestination(desPos);
+                    npc.Destination = desPos;
                 }
                 else
                 {
@@ -254,8 +271,16 @@ namespace Oxide.Plugins
         {
             foreach(BasePlayer player in BasePlayer.activePlayerList)
             {
-                player.ChatMessage(Lang(key, player.UserIDString));
+                Popup(player, Lang(key, player.UserIDString));
             }
+        }
+
+        void Popup(BasePlayer player, string message, params object[] args)
+        {
+            if (player == null) return;
+            player.SendConsoleCommand("gametip.hidegametip");
+            player.SendConsoleCommand("gametip.showgametip", string.Format("<size=8>" + message + "</size>", args));
+            ins.timer.Once(5f, () => player?.SendConsoleCommand("gametip.hidegametip"));
         }
         #endregion
     }
