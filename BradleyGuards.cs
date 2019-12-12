@@ -120,7 +120,7 @@ namespace Oxide.Plugins
             CH47HelicopterAIController chinook = GameManager.server.CreateEntity(CH47Prefab, LandingZonePos + new Vector3(100f,200f,500f)) as CH47HelicopterAIController;
             if (chinook == null) return;
             chinook.SetLandingTarget(LandingZonePos);
-            chinook.hoverHeight = 5f;
+            chinook.hoverHeight = 3f;
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
 
@@ -152,7 +152,7 @@ namespace Oxide.Plugins
 
         void HackableCrate()
         {
-            HackableLockedCrate crate = GameManager.server.CreateEntity(LockedPrefab, EventPos + new Vector3(0f,5f,0f)) as HackableLockedCrate;
+            HackableLockedCrate crate = GameManager.server.CreateEntity(LockedPrefab, EventPos + new Vector3(0f,5f,5f)) as HackableLockedCrate;
             if (crate == null) return;
             crate.Spawn();
             crate.StartHacking();
