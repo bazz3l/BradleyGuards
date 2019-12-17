@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.0.0")]
+    [Info("Bradley Guards", "Bazz3l", "1.0.1")]
     [Description("")]
     class BradleyGuards : RustPlugin
     {
@@ -18,7 +18,9 @@ namespace Oxide.Plugins
         private List<NPCPlayerApex> Guards   = new List<NPCPlayerApex>();
         private CH47LandingZone LandingZone;
         private Vector3 LandingZonePos;
+        private Quaternion LandingZoneRot;
         private Vector3 EventPos;
+        private Quaternion EventRot;
         private bool HasLaunch = false;
         private static BradleyGuards ins;
 
@@ -56,13 +58,13 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-               ["EventStart"] = "Bradley Event:\nGuards arriving, stay clear or fight for the loot.",
+               ["EventStart"] = "Bradley Event: Guards arriving, stay clear or fight for the loot.",
             }, this);
         }
 
         void OnServerInitialized()
         {
-            SetupMonumentPos();
+            SetupMonument();
         }
 
         void Init()
@@ -88,7 +90,9 @@ namespace Oxide.Plugins
         {
             if (bradley == null) return;
             EventPos = bradley.transform.position;
-            StartEvent();
+            EventRot = bradley.transform.rotation;
+            SpawnHackable();
+            SpawnChinook();
         }
 
         void OnEntityTakeDamage(BasePlayer player, HitInfo info)
@@ -111,51 +115,46 @@ namespace Oxide.Plugins
         #endregion
 
         #region Core
-        void StartEvent()
+        void SpawnHackable()
+        {
+            HackableLockedCrate crate = GameManager.server.CreateEntity(LockedPrefab, EventPos + (-Vector3.right * 5f), EventRot) as HackableLockedCrate;
+            if (crate == null) return;
+            crate.Spawn();
+            crate.StartHacking();
+        }
+
+        void SpawnChinook()
         {
             if (!HasLaunch) return;
 
             LandingZone = CreateLandingZone();
 
-            CH47HelicopterAIController chinook = GameManager.server.CreateEntity(CH47Prefab, LandingZonePos + new Vector3(100f,200f,500f)) as CH47HelicopterAIController;
+            CH47HelicopterAIController chinook = GameManager.server.CreateEntity(CH47Prefab, LandingZonePos + new Vector3(100f,200f,500f), LandingZoneRot) as CH47HelicopterAIController;
             if (chinook == null) return;
             chinook.SetLandingTarget(LandingZonePos);
-            chinook.hoverHeight = 3f;
+            chinook.hoverHeight = 2.5f;
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
 
             for (int i = 0; i < config.GuardMaxSpawn; i++)
             {
-                Vector3 passengerPos = chinook.transform.position + (chinook.transform.forward * 10f);
-                chinook.SpawnScientist(passengerPos);
+                chinook.SpawnScientist(chinook.transform.position + (chinook.transform.forward * 10f));
             }
 
             for (int j = 0; j < 1; j++)
             {
-                Vector3 pilotPos = chinook.transform.position - (chinook.transform.forward * 5f);
-                chinook.SpawnScientist(pilotPos);
+                chinook.SpawnScientist(chinook.transform.position - (chinook.transform.forward * 5f));
             }
 
             foreach(BaseVehicle.MountPointInfo mountPoint in chinook.mountPoints)
             {
-                if (mountPoint.mountable == null) continue;
-                NPCPlayerApex npc = mountPoint.mountable.GetMounted().GetComponent<NPCPlayerApex>();
+                NPCPlayerApex npc = mountPoint.mountable?.GetMounted().GetComponent<NPCPlayerApex>();
                 if (npc == null) continue;
                 Guards.Add(npc);
                 npc.gameObject.AddComponent<BradleyGuard>().desPos = EventPos + (UnityEngine.Random.onUnitSphere * 10);
             }
 
-            HackableCrate();
-
             MessagePlayers("EventStart");
-        }
-
-        void HackableCrate()
-        {
-            HackableLockedCrate crate = GameManager.server.CreateEntity(LockedPrefab, EventPos + new Vector3(0f,5f,5f)) as HackableLockedCrate;
-            if (crate == null) return;
-            crate.Spawn();
-            crate.StartHacking();
 
             timer.Once(120f, () => ClearLandingZone());
         }
@@ -164,7 +163,10 @@ namespace Oxide.Plugins
         {
             return new GameObject("helipad") { 
                 layer     = 16, 
-                transform = { position = LandingZonePos }
+                transform = { 
+                    position = LandingZonePos, 
+                    rotation = LandingZoneRot 
+                }
             }.AddComponent<CH47LandingZone>();
         }
 
@@ -184,7 +186,7 @@ namespace Oxide.Plugins
             Guards.Clear();
         }
 
-        void SetupMonumentPos()
+        void SetupMonument()
         {
             foreach (MonumentInfo monumentInfo in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
@@ -192,6 +194,7 @@ namespace Oxide.Plugins
                 Vector3 pos    = monumentInfo.transform.position + monumentInfo.transform.right * 125f;
                 pos.y          = pos.y + 5f;
                 LandingZonePos = pos;
+                LandingZoneRot = monumentInfo.transform.rotation;
                 HasLaunch      = true;
             };
         }
@@ -278,11 +281,10 @@ namespace Oxide.Plugins
         void Popup(BasePlayer player, string message, params object[] args)
         {
             if (player == null) return;
-            player.SendConsoleCommand("gametip.hidegametip");
-            player.SendConsoleCommand("gametip.showgametip", string.Format("<size=8>" + message + "</size>", args));
+            player?.SendConsoleCommand("gametip.hidegametip");
+            player?.SendConsoleCommand("gametip.showgametip", string.Format("<size=8>" + message + "</size>", args));
             ins.timer.Once(5f, () => player?.SendConsoleCommand("gametip.hidegametip"));
         }
         #endregion
     }
 }
-
