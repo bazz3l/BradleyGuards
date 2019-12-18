@@ -6,16 +6,16 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.0.1")]
+    [Info("Bradley Guards", "Bazz3l", "1.0.2")]
     [Description("")]
     class BradleyGuards : RustPlugin
     {
         [PluginReference] Plugin Kits;
 
-        private const string ScientistPrefab = "assets/prefabs/npc/scientist/scientist.prefab";
-        private const string LockedPrefab    = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
-        private const string CH47Prefab      = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
-        private List<NPCPlayerApex> Guards   = new List<NPCPlayerApex>();
+        private const string ScientistPrefab  = "assets/prefabs/npc/scientist/scientist.prefab";
+        private const string LockedPrefab     = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
+        private const string CH47Prefab       = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
+        private HashSet<NPCPlayerApex> Guards = new HashSet<NPCPlayerApex>();
         private CH47LandingZone LandingZone;
         private Vector3 LandingZonePos;
         private Quaternion LandingZoneRot;
@@ -132,7 +132,7 @@ namespace Oxide.Plugins
             CH47HelicopterAIController chinook = GameManager.server.CreateEntity(CH47Prefab, LandingZonePos + new Vector3(100f,200f,500f), LandingZoneRot) as CH47HelicopterAIController;
             if (chinook == null) return;
             chinook.SetLandingTarget(LandingZonePos);
-            chinook.hoverHeight = 2.5f;
+            chinook.hoverHeight = 1.5f;
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
 
