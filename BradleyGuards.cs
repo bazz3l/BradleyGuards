@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.0.3")]
+    [Info("Bradley Guards", "Bazz3l", "1.0.4")]
     [Description("Spawns chinook event on bradley when taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -22,21 +22,25 @@ namespace Oxide.Plugins
         private Vector3 eventPos;
         private Quaternion eventRot;
         private static BradleyGuards ins;
-        private bool hasLaunch = false;   
+        private bool hasLaunch = false;
 
         #region Config
         public PluginConfig config;
+
+        protected override void LoadDefaultConfig() => Config.WriteObject(GetDefaultConfig(), true);
 
         public PluginConfig GetDefaultConfig()
         {
             return new PluginConfig
             {
+                UsePopupMessage      = false,
                 GuardAggressionRange = 201f,
                 GuardDeaggroRange    = 202f,
                 GuardVisionRange     = 203f,
-                GuardDamageScale     = 0.2f,
+                GuardLongRange       = 100f,
+                GuardDamageScale     = 0.3f,
                 GuardMaxSpawn        = 11,
-                GuardMaxRoam         = 10,
+                GuardMaxRoam         = 50,
                 GuardKit             = "guard"
             };
         }
@@ -46,15 +50,16 @@ namespace Oxide.Plugins
             public float GuardAggressionRange;   
             public float GuardDeaggroRange;
             public float GuardVisionRange;
+            public float GuardLongRange;
             public float GuardDamageScale;
             public int GuardMaxSpawn;
             public int GuardMaxRoam;
             public string GuardKit;
+            public bool UsePopupMessage;
         }
         #endregion
 
         #region Oxide
-        protected override void LoadDefaultConfig() => Config.WriteObject(GetDefaultConfig(), true);
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
@@ -62,10 +67,7 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        void OnServerInitialized()
-        {
-            SetupMonument();
-        }
+        void OnServerInitialized() => SetupMonument();
 
         void Init()
         {
@@ -82,17 +84,28 @@ namespace Oxide.Plugins
         void OnEntitySpawned(BradleyAPC bradley)
         {
             if (bradley == null) return;
-            
+
             ClearLandingZone();
             ClearGuards();
         }
 
+        void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
+        {
+            if (npc == null || !Guards.Contains(npc)) return;
+
+            npc.NavAgent.enabled = true;
+            npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, false, false);
+            npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
+            npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, false, false);
+            npc.Resume();
+        }
+
         void OnEntityTakeDamage(BasePlayer player, HitInfo info)
         {
-            if (player == null || info?.Initiator == null) return;
+            NPCPlayerApex npc = info?.Initiator as NPCPlayerApex;
 
-            NPCPlayerApex npc = info.Initiator as NPCPlayerApex;
-            if (!Guards.Contains(npc)) return;
+            if (npc == null || !Guards.Contains(npc)) return;
+
             info.damageTypes.ScaleAll(config.GuardDamageScale);
         }
 
@@ -101,17 +114,6 @@ namespace Oxide.Plugins
             if (bradley == null || !hasLaunch) return;
 
             SpawnEvent(bradley.transform.position, bradley.transform.rotation);
-        }
-
-        void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
-        {
-            if (npc == null || !Guards.Contains(npc)) return;
-
-            npc.NavAgent.enabled = true;
-            npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
-            npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
-            npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
-            npc.Resume();
         }
         #endregion
 
@@ -144,9 +146,19 @@ namespace Oxide.Plugins
                 npc.gameObject.AddComponent<BradleyGuard>().desPos = eventPos + (UnityEngine.Random.onUnitSphere * 10);
             }
 
-            MessagePlayers("EventStart");
+            SpawnHackableCrate(pos, rot);
+
+            MessageAll("EventStart");
 
             timer.Once(120f, () => ClearLandingZone());
+        }
+
+        void SpawnHackableCrate(Vector3 pos, Quaternion rot)
+        {
+            HackableLockedCrate crate = GameManager.server.CreateEntity(lockedPrefab, pos + (Vector3.forward * 5), rot) as HackableLockedCrate;
+            if (crate == null) return;
+            crate.Spawn();
+            crate.StartHacking();
         }
 
         CH47LandingZone CreateLandingZone()
@@ -196,8 +208,7 @@ namespace Oxide.Plugins
         {
             public NPCPlayerApex npc;
             public Vector3 desPos;
-            public bool goingHome = false;
-            public int roamRadius = 20;
+            public bool goingHome;
 
             void Start()
             {
@@ -215,7 +226,7 @@ namespace Oxide.Plugins
                 npc.Stats.AggressionRange = ins.config.GuardAggressionRange;
                 npc.Stats.VisionRange     = ins.config.GuardVisionRange;
                 npc.Stats.DeaggroRange    = ins.config.GuardDeaggroRange;
-                npc.Stats.LongRange       = 80f;
+                npc.Stats.LongRange       = ins.config.GuardLongRange;
                 npc.Stats.Hostility       = 1f;
                 npc.Stats.Defensiveness   = 1f;
                 npc.Stats.OnlyAggroMarkedTargets = false;
@@ -240,7 +251,7 @@ namespace Oxide.Plugins
             void ShouldRelocate()
             {
                 float distance = Vector3.Distance(transform.position, desPos);
-                if (!goingHome && distance >= ins.config.GuardMaxRoam)
+                if(!goingHome && distance >= ins.config.GuardMaxRoam)
                 {
                     goingHome = true;
                 }
@@ -261,10 +272,15 @@ namespace Oxide.Plugins
         #region Helpers
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        void MessagePlayers(string key)
+        void MessageAll(string key)
         {
             foreach(BasePlayer player in BasePlayer.activePlayerList)
-                Popup(player, Lang(key, player.UserIDString));
+            {
+                if (config.UsePopupMessage)
+                    Popup(player, Lang(key, player.UserIDString));
+                else
+                    player.ChatMessage(Lang(key, player.UserIDString));
+            }
         }
 
         void Popup(BasePlayer player, string message, params object[] args)
