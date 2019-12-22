@@ -27,27 +27,38 @@ namespace Oxide.Plugins
         #region Config
         public PluginConfig config;
 
-        protected override void LoadDefaultConfig() => Config.WriteObject(GetDefaultConfig(), true);
+        protected override void LoadDefaultConfig()
+        {
+            PrintWarning("Loading Default Config");
+        }
+
+        void LoadConfig()
+        {
+            Config.Clear();
+            config = Config.ReadObject<PluginConfig>();
+            Config.WriteObject(config, true);
+        }
 
         public PluginConfig GetDefaultConfig()
         {
             return new PluginConfig
             {
-                UsePopupMessage      = false,
+                UsePopupMessage      = true,
                 GuardAggressionRange = 201f,
                 GuardDeaggroRange    = 202f,
                 GuardVisionRange     = 203f,
                 GuardLongRange       = 100f,
-                GuardDamageScale     = 0.3f,
+                GuardDamageScale     = 0.5f,
                 GuardMaxSpawn        = 11,
-                GuardMaxRoam         = 50,
+                GuardMaxRoam         = 80,
                 GuardKit             = "guard"
             };
         }
 
         public class PluginConfig
         {
-            public float GuardAggressionRange;   
+            public bool UsePopupMessage;
+            public float GuardAggressionRange;
             public float GuardDeaggroRange;
             public float GuardVisionRange;
             public float GuardLongRange;
@@ -55,7 +66,6 @@ namespace Oxide.Plugins
             public int GuardMaxSpawn;
             public int GuardMaxRoam;
             public string GuardKit;
-            public bool UsePopupMessage;
         }
         #endregion
 
@@ -63,16 +73,20 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-               ["EventStart"] = "Bradley Event: Guards arriving, stay clear or fight for the loot.",
+               ["EventStart"] = "Bradley Guards, stay clear or fight for the loot.",
             }, this);
         }
 
-        void OnServerInitialized() => SetupMonument();
+        void OnServerInitialized()
+        {
+            ins = this;
+
+            SetupMonument();
+        }
 
         void Init()
         {
-            config = Config.ReadObject<PluginConfig>();
-            ins    = this;
+            LoadConfig();
         }
 
         void Unload()
