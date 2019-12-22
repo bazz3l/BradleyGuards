@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.0.4")]
+    [Info("Bradley Guards", "Bazz3l", "1.0.5")]
     [Description("Spawns chinook event on bradley when taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -35,8 +35,8 @@ namespace Oxide.Plugins
         void LoadConfig()
         {
             Config.Clear();
+            Config.WriteObject(GetDefaultConfig(), true);
             config = Config.ReadObject<PluginConfig>();
-            Config.WriteObject(config, true);
         }
 
         public PluginConfig GetDefaultConfig()
@@ -307,3 +307,4 @@ namespace Oxide.Plugins
         #endregion
     }
 }
+
