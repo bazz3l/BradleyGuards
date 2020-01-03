@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.1")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.2")]
     [Description("Spawns an event when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -41,7 +41,7 @@ namespace Oxide.Plugins
                 GuardDeaggroRange    = 104f,
                 GuardDamageScale     = 0.5f,
                 GuardMaxSpawn        = 11, // Max is 11
-                GuardMaxRoam         = 30,
+                GuardMaxRoam         = 60,
                 GuardKit             = "guard"
             };
         }
