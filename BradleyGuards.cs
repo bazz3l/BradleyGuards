@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.0.6")]
+    [Info("Bradley Guards", "Bazz3l", "1.0.7")]
     [Description("Spawns an event when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -21,7 +21,7 @@ namespace Oxide.Plugins
         private Vector3 landingPos;
         private Quaternion landingRot;
         private static BradleyGuards plugin;
-        private bool hasLaunch = false;
+        private bool hasLaunch;
 
         #region Config
         public PluginConfig config;
@@ -148,15 +148,15 @@ namespace Oxide.Plugins
                 NPCPlayerApex npc = mountPoint.mountable.GetMounted().GetComponent<NPCPlayerApex>();
                 if (npc == null) continue;
 
-                npc.gameObject.AddComponent<BradleyGuard>().desPos = eventPos + (UnityEngine.Random.onUnitSphere * 10);
+                Vector3 npcDes = eventPos + (UnityEngine.Random.onUnitSphere * 10);
+
+                npc.gameObject.AddComponent<BradleyGuard>().desPos = npcDes;
 
                 Guards.Add(npc);
             }
-        }
 
-        private void SpawnHackableCrate(Vector3 eventPos, Quaternion eventRot)
-        {
-            HackableLockedCrate crate = GameManager.server.CreateEntity(lockedPrefab, eventPos + (Vector3.forward * 5), eventRot) as HackableLockedCrate;
+            Vector3 cratePos = eventPos + (UnityEngine.Random.onUnitSphere * 5);
+            HackableLockedCrate crate = GameManager.server.CreateEntity(lockedPrefab, cratePos, eventRot) as HackableLockedCrate;
             crate.Spawn();
             crate.StartHacking();
         }
