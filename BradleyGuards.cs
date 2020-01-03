@@ -6,22 +6,24 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.0")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.1")]
     [Description("Spawns an event when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
         [PluginReference] Plugin Kits;
 
+        #region Fields
         private const string lockedPrefab = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
         private const string ch47Prefab   = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
         private const string landingName  = "BradleyLandingZone";
 
-        private HashSet<NPCPlayerApex> Guards = new HashSet<NPCPlayerApex>();
+        private HashSet<NPCPlayerApex> guards = new HashSet<NPCPlayerApex>();
         private static BradleyGuards plugin;
         private bool hasLaunch;
         private Vector3 chinkookPos;
         private Vector3 landingPos;
         private Quaternion landingRot;
+        #endregion
 
         #region Config
         public PluginConfig config;
@@ -32,6 +34,7 @@ namespace Oxide.Plugins
         {
             return new PluginConfig
             {
+                SpawnHackableCrate   = true,
                 GuardAggressionRange = 101f,
                 GuardVisionRange     = 103f,
                 GuardLongRange       = 100f,
@@ -45,6 +48,7 @@ namespace Oxide.Plugins
 
         public class PluginConfig
         {
+            public bool SpawnHackableCrate;
             public float GuardAggressionRange;
             public float GuardDeaggroRange;
             public float GuardVisionRange;
@@ -96,10 +100,7 @@ namespace Oxide.Plugins
         {
             if (bradley == null || !hasLaunch) return;
 
-            Quaternion eventRot = bradley.transform.rotation;
-            Vector3 eventPos    = bradley.transform.position;
-
-            SpawnEvent(eventPos, eventRot);
+            SpawnEvent(bradley.transform.position, bradley.transform.rotation);
 
             MessageAll();
         }
@@ -107,14 +108,14 @@ namespace Oxide.Plugins
         private void OnEntityTakeDamage(BasePlayer player, HitInfo info)
         {
             NPCPlayerApex npc = info?.Initiator as NPCPlayerApex;
-            if (npc == null || !Guards.Contains(npc)) return;
+            if (npc == null || !guards.Contains(npc)) return;
 
             info.damageTypes.ScaleAll(config.GuardDamageScale);
         }
 
         private void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
-            if (npc == null || !Guards.Contains(npc)) return;
+            if (npc == null || !guards.Contains(npc)) return;
 
             npc.SetFact(NPCPlayerApex.Facts.IsMounted,         (byte) 0, true, true);
             npc.SetFact(NPCPlayerApex.Facts.WantsToDismount,   (byte) 0, true, true);
@@ -143,13 +144,19 @@ namespace Oxide.Plugins
                 NPCPlayerApex npc = mountPoint.mountable.GetMounted().GetComponent<NPCPlayerApex>();
                 if (npc == null) continue;
 
-                npc.gameObject.AddComponent<BradleyGuard>().desPos = RandomCircle(eventPos, 5f);
+                npc.gameObject.AddComponent<BradleyGuard>().Desitination = RandomCircle(eventPos, 5f);
 
-                Guards.Add(npc);
+                guards.Add(npc);
             }
 
-            Vector3 cratePos = RandomCircle(eventPos, 5f);
-            cratePos.y += 5f;
+            if (config.SpawnHackableCrate)
+                CreateHackableCrate(eventPos, eventRot);
+        }
+
+        private void CreateHackableCrate(Vector3 eventPos, Quaternion eventRot)
+        {
+            Vector3 cratePos = eventPos + (Vector3.forward * 5);
+            cratePos.y += 2f;
 
             HackableLockedCrate crate = GameManager.server.CreateEntity(lockedPrefab, cratePos, eventRot) as HackableLockedCrate;
             crate.Spawn();
@@ -181,7 +188,7 @@ namespace Oxide.Plugins
                 UnityEngine.Object.Destroy(guard);
             }
 
-            Guards.Clear();
+            guards.Clear();
         }
 
         private void SetupLandingPoint()
@@ -204,11 +211,11 @@ namespace Oxide.Plugins
         #region Classes
         class BradleyGuard : MonoBehaviour
         {
-            public NPCPlayerApex npc;
-            public Vector3 desPos;
-            public bool goingHome;
+            private NPCPlayerApex npc;
+            public Vector3 Desitination;
+            private bool goingBack;
 
-            void Start()
+            private void Awake()
             {
                 npc = gameObject.GetComponent<NPCPlayerApex>();
                 if (npc == null)
@@ -220,8 +227,8 @@ namespace Oxide.Plugins
 
                 npc.RadioEffect           = new GameObjectRef();
                 npc.DeathEffect           = new GameObjectRef();
-                npc.SpawnPosition         = desPos;
-                npc.Destination           = desPos;
+                npc.SpawnPosition         = Desitination;
+                npc.Destination           = Desitination;
                 npc.Stats.AggressionRange = plugin.config.GuardAggressionRange;
                 npc.Stats.VisionRange     = plugin.config.GuardVisionRange;
                 npc.Stats.DeaggroRange    = plugin.config.GuardDeaggroRange;
@@ -236,36 +243,36 @@ namespace Oxide.Plugins
                 Interface.Oxide.CallHook("GiveKit", npc, plugin.config.GuardKit);
             }
 
-            void FixedUpdate()
+            private void FixedUpdate()
             {
                 if (npc == null || !npc.IsNavRunning()) return;
 
                 ShouldRelocate();
             }
 
-            void OnDestroy()
+            private void OnDestroy()
             {
                 if (npc == null || npc.IsDestroyed) return;
 
                 npc?.KillMessage();
             }
 
-            void ShouldRelocate()
+            private void ShouldRelocate()
             {
-                float distance = Vector3.Distance(transform.position, desPos);
-                if(!goingHome && distance >= plugin.config.GuardMaxRoam)
+                float distance = Vector3.Distance(transform.position, Desitination);
+                if(!goingBack && distance >= plugin.config.GuardMaxRoam)
                 {
-                    goingHome = true;
+                    goingBack = true;
                 }
 
-                if (goingHome && distance >= plugin.config.GuardMaxRoam)
+                if (goingBack && distance >= plugin.config.GuardMaxRoam)
                 {
-                    npc.GetNavAgent.SetDestination(desPos);
-                    npc.Destination = desPos;
+                    npc.GetNavAgent.SetDestination(Desitination);
+                    npc.Destination = Desitination;
                 }
                 else
                 {
-                    goingHome = false;
+                    goingBack = false;
                 }
             }
         }
