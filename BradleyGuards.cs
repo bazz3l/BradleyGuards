@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.2")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.3")]
     [Description("Spawns an event when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -35,13 +35,13 @@ namespace Oxide.Plugins
             return new PluginConfig
             {
                 SpawnHackableCrate   = true,
+                GuardMaxSpawn        = 11, // Max is 11
+                GuardMaxRoam         = 60,
                 GuardAggressionRange = 101f,
                 GuardVisionRange     = 103f,
                 GuardLongRange       = 100f,
                 GuardDeaggroRange    = 104f,
                 GuardDamageScale     = 0.5f,
-                GuardMaxSpawn        = 11, // Max is 11
-                GuardMaxRoam         = 60,
                 GuardKit             = "guard"
             };
         }
@@ -144,7 +144,7 @@ namespace Oxide.Plugins
                 NPCPlayerApex npc = mountPoint.mountable.GetMounted().GetComponent<NPCPlayerApex>();
                 if (npc == null) continue;
 
-                npc.gameObject.AddComponent<BradleyGuard>().Desitination = RandomCircle(eventPos, 5f);
+                npc.gameObject.AddComponent<BradleyGuard>().spawnPoint = RandomCircle(eventPos, 5f);
 
                 npcGuards.Add(npc);
             }
@@ -213,7 +213,7 @@ namespace Oxide.Plugins
         class BradleyGuard : MonoBehaviour
         {
             private NPCPlayerApex npc;
-            public Vector3 Desitination;
+            public Vector3 spawnPoint;
             private bool goingBack;
 
             private void Awake()
@@ -228,8 +228,8 @@ namespace Oxide.Plugins
 
                 npc.RadioEffect           = new GameObjectRef();
                 npc.DeathEffect           = new GameObjectRef();
-                npc.SpawnPosition         = Desitination;
-                npc.Destination           = Desitination;
+                npc.SpawnPosition         = spawnPoint;
+                npc.Destination           = spawnPoint;
                 npc.Stats.AggressionRange = plugin.config.GuardAggressionRange;
                 npc.Stats.VisionRange     = plugin.config.GuardVisionRange;
                 npc.Stats.DeaggroRange    = plugin.config.GuardDeaggroRange;
@@ -260,7 +260,7 @@ namespace Oxide.Plugins
 
             private void ShouldRelocate()
             {
-                float distance = Vector3.Distance(transform.position, Desitination);
+                float distance = Vector3.Distance(transform.position, spawnPoint);
                 if(!goingBack && distance >= plugin.config.GuardMaxRoam)
                 {
                     goingBack = true;
@@ -268,8 +268,8 @@ namespace Oxide.Plugins
 
                 if (goingBack && distance >= plugin.config.GuardMaxRoam)
                 {
-                    npc.GetNavAgent.SetDestination(Desitination);
-                    npc.Destination = Desitination;
+                    npc.GetNavAgent.SetDestination(spawnPoint);
+                    npc.Destination = spawnPoint;
                 }
                 else
                 {
