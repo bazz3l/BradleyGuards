@@ -17,12 +17,12 @@ namespace Oxide.Plugins
         private const string ch47Prefab   = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
         private const string landingName  = "BradleyLandingZone";
 
-        private HashSet<NPCPlayerApex> guards = new HashSet<NPCPlayerApex>();
+        private HashSet<NPCPlayerApex> npcGuards = new HashSet<NPCPlayerApex>();
         private static BradleyGuards plugin;
         private bool hasLaunch;
-        private Vector3 chinkookPos;
-        private Vector3 landingPos;
-        private Quaternion landingRot;
+        private Vector3 chinookStartPosition;
+        private Vector3 landingPosition;
+        private Quaternion landingRotation;
         #endregion
 
         #region Config
@@ -108,14 +108,14 @@ namespace Oxide.Plugins
         private void OnEntityTakeDamage(BasePlayer player, HitInfo info)
         {
             NPCPlayerApex npc = info?.Initiator as NPCPlayerApex;
-            if (npc == null || !guards.Contains(npc)) return;
+            if (npc == null || !npcGuards.Contains(npc)) return;
 
             info.damageTypes.ScaleAll(config.GuardDamageScale);
         }
 
         private void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
-            if (npc == null || !guards.Contains(npc)) return;
+            if (npc == null || !npcGuards.Contains(npc)) return;
 
             npc.SetFact(NPCPlayerApex.Facts.IsMounted,         (byte) 0, true, true);
             npc.SetFact(NPCPlayerApex.Facts.WantsToDismount,   (byte) 0, true, true);
@@ -127,8 +127,8 @@ namespace Oxide.Plugins
         #region Core
         private void SpawnEvent(Vector3 eventPos, Quaternion eventRot)
         {
-            CH47HelicopterAIController chinook = GameManager.server.CreateEntity(ch47Prefab, chinkookPos, landingRot) as CH47HelicopterAIController;
-            chinook.SetLandingTarget(landingPos);
+            CH47HelicopterAIController chinook = GameManager.server.CreateEntity(ch47Prefab, chinookStartPosition, landingRotation) as CH47HelicopterAIController;
+            chinook.SetLandingTarget(landingPosition);
             chinook.hoverHeight = 1.5f;
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
@@ -146,7 +146,7 @@ namespace Oxide.Plugins
 
                 npc.gameObject.AddComponent<BradleyGuard>().Desitination = RandomCircle(eventPos, 5f);
 
-                guards.Add(npc);
+                npcGuards.Add(npc);
             }
 
             if (config.SpawnHackableCrate)
@@ -167,7 +167,7 @@ namespace Oxide.Plugins
         {
             return new GameObject(landingName) {
                 layer     = 16, 
-                transform = { position = landingPos, rotation = landingRot }
+                transform = { position = landingPosition, rotation = landingRotation }
             }.AddComponent<CH47LandingZone>();
         }
 
@@ -188,7 +188,7 @@ namespace Oxide.Plugins
                 UnityEngine.Object.Destroy(guard);
             }
 
-            guards.Clear();
+            npcGuards.Clear();
         }
 
         private void SetupLandingPoint()
@@ -197,13 +197,14 @@ namespace Oxide.Plugins
             {
                 if (!monument.gameObject.name.Contains("launch_site_1")) continue;
 
-                hasLaunch    = true;
-                landingRot   = monument.transform.rotation;
-                landingPos   = monument.transform.position + monument.transform.right * 125f;
-                landingPos.y += 5f;
+                landingRotation   = monument.transform.rotation;
+                landingPosition   = monument.transform.position + monument.transform.right * 125f;
+                landingPosition.y += 5f;
 
-                chinkookPos = monument.transform.position + -monument.transform.right * 125f;
-                chinkookPos.y += 150f;
+                chinookStartPosition = monument.transform.position + -monument.transform.right * 125f;
+                chinookStartPosition.y += 150f;
+
+                hasLaunch = true;
             };
         }
         #endregion
