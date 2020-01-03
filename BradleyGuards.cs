@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.0.7")]
+    [Info("Bradley Guards", "Bazz3l", "1.0.8")]
     [Description("Spawns an event when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -14,14 +14,15 @@ namespace Oxide.Plugins
 
         private const string lockedPrefab = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
         private const string ch47Prefab   = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
-        private const string landingName  = "bradley-lzone";
+        private const string landingName  = "BradleyLandingZone";
+
         private HashSet<NPCPlayerApex> Guards = new HashSet<NPCPlayerApex>();
+        private static BradleyGuards plugin;
         private CH47LandingZone landingZone;
+        private bool hasLaunch;
         private Vector3 chinkookPos;
         private Vector3 landingPos;
         private Quaternion landingRot;
-        private static BradleyGuards plugin;
-        private bool hasLaunch;
 
         #region Config
         public PluginConfig config;
@@ -37,7 +38,7 @@ namespace Oxide.Plugins
                 GuardLongRange       = 100f,
                 GuardDeaggroRange    = 104f,
                 GuardDamageScale     = 0.5f,
-                GuardMaxSpawn        = 11,
+                GuardMaxSpawn        = 11, // Max is 11
                 GuardMaxRoam         = 30,
                 GuardKit             = "guard"
             };
@@ -72,16 +73,13 @@ namespace Oxide.Plugins
             ClearLandingZone();
             ClearGuards();
 
-            if (!hasLaunch) return;
-
-            landingZone = CreateLandingZone();
+            if (hasLaunch)
+                landingZone = CreateLandingZone();
         }
 
         private void Init()
         {
             config = Config.ReadObject<PluginConfig>();
-
-            //
         }
 
         private void Unload()
@@ -106,7 +104,7 @@ namespace Oxide.Plugins
 
             SpawnEvent(eventPos, eventRot);
 
-            MessageAll("EventStart");
+            MessageAll();
         }
 
         private void OnEntityTakeDamage(BasePlayer player, HitInfo info)
@@ -148,14 +146,14 @@ namespace Oxide.Plugins
                 NPCPlayerApex npc = mountPoint.mountable.GetMounted().GetComponent<NPCPlayerApex>();
                 if (npc == null) continue;
 
-                Vector3 npcDes = eventPos + (UnityEngine.Random.onUnitSphere * 10);
-
-                npc.gameObject.AddComponent<BradleyGuard>().desPos = npcDes;
+                npc.gameObject.AddComponent<BradleyGuard>().desPos = RandomCircle(eventPos, 5f);
 
                 Guards.Add(npc);
             }
 
-            Vector3 cratePos = eventPos + (UnityEngine.Random.onUnitSphere * 5);
+            Vector3 cratePos = RandomCircle(eventPos, 5f);
+            cratePos.y += 5f;
+
             HackableLockedCrate crate = GameManager.server.CreateEntity(lockedPrefab, cratePos, eventRot) as HackableLockedCrate;
             crate.Spawn();
             crate.StartHacking();
@@ -176,9 +174,9 @@ namespace Oxide.Plugins
                 if (!lzone.gameObject.name.Contains(landingName)) continue;
                 
                 UnityEngine.GameObject.Destroy(lzone.gameObject);
-            }
 
-            landingZone = null;
+                landingZone = null;
+            }
         }
 
         private void ClearGuards()
@@ -197,14 +195,13 @@ namespace Oxide.Plugins
             {
                 if (!monument.gameObject.name.Contains("launch_site_1")) continue;
 
+                hasLaunch    = true;
                 landingRot   = monument.transform.rotation;
                 landingPos   = monument.transform.position + monument.transform.right * 125f;
                 landingPos.y += 5f;
 
                 chinkookPos = monument.transform.position + -monument.transform.right * 125f;
                 chinkookPos.y += 150f;
-
-                hasLaunch = true;
             };
         }
         #endregion
@@ -280,15 +277,24 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helpers
-        string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        void MessageAll(string key)
+        private Vector3 RandomCircle(Vector3 center, float radius)
+        {
+            float angle = UnityEngine.Random.Range(0f, 100f) * 360;
+            Vector3 pos = center;
+            pos.x += radius * Mathf.Sin(angle * Mathf.Deg2Rad);
+            pos.z += radius * Mathf.Cos(angle * Mathf.Deg2Rad);
+            return pos;
+        }
+
+        private void MessageAll()
         {
             foreach(BasePlayer player in BasePlayer.activePlayerList)
             {
                 if (player == null || !player.IsConnected) continue;
 
-                player.ChatMessage(Lang(key, player.UserIDString));
+                player.ChatMessage(Lang("EventStart", player.UserIDString));
             }
         }
         #endregion
