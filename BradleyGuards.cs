@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.0.8")]
+    [Info("Bradley Guards", "Bazz3l", "1.0.9")]
     [Description("Spawns an event when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -18,7 +18,6 @@ namespace Oxide.Plugins
 
         private HashSet<NPCPlayerApex> Guards = new HashSet<NPCPlayerApex>();
         private static BradleyGuards plugin;
-        private CH47LandingZone landingZone;
         private bool hasLaunch;
         private Vector3 chinkookPos;
         private Vector3 landingPos;
@@ -74,7 +73,7 @@ namespace Oxide.Plugins
             ClearGuards();
 
             if (hasLaunch)
-                landingZone = CreateLandingZone();
+                CreateLandingZone();
         }
 
         private void Init()
@@ -161,7 +160,7 @@ namespace Oxide.Plugins
 
         private CH47LandingZone CreateLandingZone()
         {
-            return new GameObject(landingName) { 
+            return new GameObject(landingName) {
                 layer     = 16, 
                 transform = { position = landingPos, rotation = landingRot }
             }.AddComponent<CH47LandingZone>();
@@ -169,13 +168,11 @@ namespace Oxide.Plugins
 
         private void ClearLandingZone()
         {
-            foreach(CH47LandingZone lzone in UnityEngine.Object.FindObjectsOfType<CH47LandingZone>())
+            foreach(CH47LandingZone landingZone in UnityEngine.Object.FindObjectsOfType<CH47LandingZone>())
             {
-                if (!lzone.gameObject.name.Contains(landingName)) continue;
+                if (!landingZone.gameObject.name.Contains(landingName)) continue;
                 
-                UnityEngine.GameObject.Destroy(lzone.gameObject);
-
-                landingZone = null;
+                UnityEngine.GameObject.Destroy(landingZone.gameObject);
             }
         }
 
