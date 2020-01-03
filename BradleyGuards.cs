@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.0.9")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.0")]
     [Description("Spawns an event when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -89,8 +89,6 @@ namespace Oxide.Plugins
 
         private void OnEntitySpawned(BradleyAPC bradley)
         {
-            if (bradley == null) return;
-
             ClearGuards();
         }
 
