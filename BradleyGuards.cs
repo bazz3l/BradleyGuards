@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.3")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.4")]
     [Description("Spawns an event when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -72,9 +72,8 @@ namespace Oxide.Plugins
         {
             plugin = this;
 
-            SetupLandingPoint();
-            ClearLandingZone();
-            ClearGuards();
+            CheckLandingPoint();
+            CleanUp();
 
             if (hasLaunch)
                 CreateLandingZone();
@@ -87,8 +86,7 @@ namespace Oxide.Plugins
 
         private void Unload()
         {
-            ClearLandingZone();
-            ClearGuards();
+            CleanUp();
         }
 
         private void OnEntitySpawned(BradleyAPC bradley)
@@ -96,19 +94,20 @@ namespace Oxide.Plugins
             ClearGuards();
         }
 
-        private void OnEntityKill(BradleyAPC bradley)
+        private void OnEntityDeath(BradleyAPC bradley)
         {
             if (bradley == null || !hasLaunch) return;
 
             SpawnEvent(bradley.transform.position, bradley.transform.rotation);
-
-            MessageAll();
         }
 
         private void OnEntityTakeDamage(BasePlayer player, HitInfo info)
         {
             NPCPlayerApex npc = info?.Initiator as NPCPlayerApex;
-            if (npc == null || !npcGuards.Contains(npc)) return;
+            if (npc == null || !npcGuards.Contains(npc))
+            {
+                return;
+            }
 
             info.damageTypes.ScaleAll(config.GuardDamageScale);
         }
@@ -129,6 +128,7 @@ namespace Oxide.Plugins
         {
             CH47HelicopterAIController chinook = GameManager.server.CreateEntity(ch47Prefab, chinookStartPosition, landingRotation) as CH47HelicopterAIController;
             chinook.SetLandingTarget(landingPosition);
+            chinook.SetMoveTarget(landingPosition);
             chinook.hoverHeight = 1.5f;
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
@@ -151,6 +151,8 @@ namespace Oxide.Plugins
 
             if (config.SpawnHackableCrate)
                 CreateHackableCrate(eventPos, eventRot);
+
+            MessageAll();
         }
 
         private void CreateHackableCrate(Vector3 eventPos, Quaternion eventRot)
@@ -167,17 +169,25 @@ namespace Oxide.Plugins
         {
             return new GameObject(landingName) {
                 layer     = 16, 
-                transform = { position = landingPosition, rotation = landingRotation }
+                transform = { 
+                    position = landingPosition, 
+                    rotation = landingRotation 
+                }
             }.AddComponent<CH47LandingZone>();
+        }
+
+        private CleanUp()
+        {
+            ClearLandingZone();
+            ClearGuards();
         }
 
         private void ClearLandingZone()
         {
-            foreach(CH47LandingZone landingZone in UnityEngine.Object.FindObjectsOfType<CH47LandingZone>())
+            foreach(CH47LandingZone zone in UnityEngine.Object.FindObjectsOfType<CH47LandingZone>())
             {
-                if (!landingZone.gameObject.name.Contains(landingName)) continue;
-                
-                UnityEngine.GameObject.Destroy(landingZone.gameObject);
+                if (zone.gameObject.name.Contains(landingName))
+                    UnityEngine.GameObject.Destroy(zone.gameObject);
             }
         }
 
@@ -191,7 +201,7 @@ namespace Oxide.Plugins
             npcGuards.Clear();
         }
 
-        private void SetupLandingPoint()
+        private void CheckLandingPoint()
         {
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
@@ -262,9 +272,7 @@ namespace Oxide.Plugins
             {
                 float distance = Vector3.Distance(transform.position, spawnPoint);
                 if(!goingBack && distance >= plugin.config.GuardMaxRoam)
-                {
                     goingBack = true;
-                }
 
                 if (goingBack && distance >= plugin.config.GuardMaxRoam)
                 {
