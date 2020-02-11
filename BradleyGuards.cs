@@ -18,11 +18,11 @@ namespace Oxide.Plugins
         const string landingName  = "BradleyLandingZone";
 
         HashSet<NPCPlayerApex> npcGuards = new HashSet<NPCPlayerApex>();
-        static BradleyGuards plugin;
-        bool hasLaunch;
+        public static BradleyGuards plugin;
         Quaternion landingRotation;
         Vector3 landingPosition;
         Vector3 chinookPosition;
+        bool hasLaunch;
         #endregion
 
         #region Config
@@ -104,10 +104,7 @@ namespace Oxide.Plugins
         void OnEntityTakeDamage(BasePlayer player, HitInfo info)
         {
             NPCPlayerApex npc = info?.Initiator as NPCPlayerApex;
-            if (npc == null || !npcGuards.Contains(npc))
-            {
-                return;
-            }
+            if (npc == null || !npcGuards.Contains(npc)) return;
 
             info.damageTypes.ScaleAll(config.GuardDamageScale);
         }
@@ -145,9 +142,10 @@ namespace Oxide.Plugins
                 if (npc == null) continue;
 
                 BradleyGuard guard = npc.gameObject.AddComponent<BradleyGuard>();
-                guard.eventPos  = eventPos;
-                guard.eventSize = 50f;
-
+                guard.eventPosition = eventPos;
+                guard.roamPosition  = RandomCircle(eventPos, 5f);
+                guard.roamRange     = config.GuardMaxRoam;
+                
                 npcGuards.Add(npc);
             }
 
@@ -227,27 +225,22 @@ namespace Oxide.Plugins
         class BradleyGuard : MonoBehaviour
         {
             private NPCPlayerApex npc;
-            public Vector3 roamPoint;
-            public Vector3 eventPos;
-            public float eventSize;
-            bool goingBack;
+            public Vector3 eventPosition;
+            public Vector3 roamPosition;
+            public float roamRange;
+            bool goBack;
 
-            void Awake()
+            void Start()
             {
                 npc = gameObject.GetComponent<NPCPlayerApex>();
                 if (npc == null)
                 {
                     Destroy(this);
-
                     return;
                 }
 
-                roamPoint                 = RandomCircle(eventPos, 5f);
                 npc.RadioEffect           = new GameObjectRef();
-                npc.DeathEffect           = new GameObjectRef();
-                npc.CurrentBehaviour      = BaseNpc.Behaviour.Wander;
-                npc.Destination           = roamPoint;
-                npc.Stats.MaxRoamRange    = eventSize * 0.5f;                
+                npc.DeathEffect           = new GameObjectRef();          
                 npc.Stats.AggressionRange = plugin.config.GuardAggressionRange;
                 npc.Stats.VisionRange     = plugin.config.GuardVisionRange;
                 npc.Stats.DeaggroRange    = plugin.config.GuardDeaggroRange;
@@ -258,9 +251,9 @@ namespace Oxide.Plugins
                 npc.InitFacts();
 
                 if (npc.IsNavRunning())
-                    npc.GetNavAgent.SetDestination(roamPoint);
+                    npc.GetNavAgent.SetDestination(roamPosition);
                 else
-                    npc.finalDestination = roamPoint;
+                    npc.finalDestination = roamPosition;
 
                 npc.inventory.Strip();
 
@@ -271,53 +264,45 @@ namespace Oxide.Plugins
 
             void OnDestroy()
             {
-                if (npc == null || npc.IsDestroyed)
-                {
-                    return;
-                }
+                if (npc == null || npc.IsDestroyed) return;
 
                 npc?.KillMessage();
             }
 
             void ShouldRelocate()
             {
-                if (npc == null || npc.IsDestroyed)
+                if (npc == null || npc.IsDestroyed) return;
+
+                float distance = Vector3.Distance(transform.position, eventPosition);
+                if(!goBack && distance >= roamRange)
+                    goBack = true;
+
+                if (goBack && distance >= roamRange)
                 {
-                    return;
-                }
-
-                float distance = Vector3.Distance(transform.position, roamPoint);
-                if(!goingBack && distance >= plugin.config.GuardMaxRoam)
-                    goingBack = true;
-
-                if (goingBack && distance >= plugin.config.GuardMaxRoam)
-                {
-                    roamPoint = RandomCircle(eventPos, 5f);
-
                     if (npc.IsNavRunning())
-                        npc.GetNavAgent.SetDestination(roamPoint);
+                        npc.GetNavAgent.SetDestination(roamPosition);
                     else
-                        npc.Destination = roamPoint;
+                        npc.finalDestination = roamPosition;
                 }
                 else
                 {
-                    goingBack = false;
+                    goBack = false;
                 }
-            }
-
-            Vector3 RandomCircle(Vector3 center, float radius)
-            {
-                float angle = UnityEngine.Random.Range(0f, 100f) * 360;
-                Vector3 pos = center;
-                pos.x += radius * Mathf.Sin(angle * Mathf.Deg2Rad);
-                pos.z += radius * Mathf.Cos(angle * Mathf.Deg2Rad);
-                return pos;
             }
         }
         #endregion
 
         #region Helpers
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+
+        Vector3 RandomCircle(Vector3 center, float radius)
+        {
+            float angle = UnityEngine.Random.Range(0f, 100f) * 360;
+            Vector3 pos = center;
+            pos.x += radius * Mathf.Sin(angle * Mathf.Deg2Rad);
+            pos.z += radius * Mathf.Cos(angle * Mathf.Deg2Rad);
+            return pos;
+        }
 
         void MessageAll()
         {
