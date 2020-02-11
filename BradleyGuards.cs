@@ -6,31 +6,31 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.4")]
-    [Description("Spawns an event when bradley is taken down")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.5")]
+    [Description("Calls in reinforcements when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
         [PluginReference] Plugin Kits;
 
         #region Fields
-        private const string lockedPrefab = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
-        private const string ch47Prefab   = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
-        private const string landingName  = "BradleyLandingZone";
+        const string lockedPrefab = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
+        const string ch47Prefab   = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
+        const string landingName  = "BradleyLandingZone";
 
-        private HashSet<NPCPlayerApex> npcGuards = new HashSet<NPCPlayerApex>();
-        private static BradleyGuards plugin;
-        private bool hasLaunch;
-        private Vector3 chinookStartPosition;
-        private Vector3 landingPosition;
-        private Quaternion landingRotation;
+        HashSet<NPCPlayerApex> npcGuards = new HashSet<NPCPlayerApex>();
+        static BradleyGuards plugin;
+        bool hasLaunch;
+        Quaternion landingRotation;
+        Vector3 landingPosition;
+        Vector3 chinookPosition;
         #endregion
 
         #region Config
-        public PluginConfig config;
+        PluginConfig config;
 
         protected override void LoadDefaultConfig() => Config.WriteObject(GetDefaultConfig(), true);
 
-        public PluginConfig GetDefaultConfig()
+        PluginConfig GetDefaultConfig()
         {
             return new PluginConfig
             {
@@ -46,7 +46,7 @@ namespace Oxide.Plugins
             };
         }
 
-        public class PluginConfig
+        class PluginConfig
         {
             public bool SpawnHackableCrate;
             public float GuardAggressionRange;
@@ -64,11 +64,11 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-               ["EventStart"] = "Bradley Guards, stay clear or fight for the loot.",
+                {"EventStart", "<color=#DC143C>Bradley Reinforcements</color>: stay clear or fight for the loot."}
             }, this);
         }
 
-        private void OnServerInitialized()
+        void OnServerInitialized()
         {
             plugin = this;
 
@@ -79,29 +79,29 @@ namespace Oxide.Plugins
                 CreateLandingZone();
         }
 
-        private void Init()
+        void Init()
         {
             config = Config.ReadObject<PluginConfig>();
         }
 
-        private void Unload()
+        void Unload()
         {
             CleanUp();
         }
 
-        private void OnEntitySpawned(BradleyAPC bradley)
+        void OnEntitySpawned(BradleyAPC bradley)
         {
             ClearGuards();
         }
 
-        private void OnEntityDeath(BradleyAPC bradley)
+        void OnEntityDeath(BradleyAPC bradley)
         {
             if (bradley == null || !hasLaunch) return;
 
             SpawnEvent(bradley.transform.position, bradley.transform.rotation);
         }
 
-        private void OnEntityTakeDamage(BasePlayer player, HitInfo info)
+        void OnEntityTakeDamage(BasePlayer player, HitInfo info)
         {
             NPCPlayerApex npc = info?.Initiator as NPCPlayerApex;
             if (npc == null || !npcGuards.Contains(npc))
@@ -112,7 +112,7 @@ namespace Oxide.Plugins
             info.damageTypes.ScaleAll(config.GuardDamageScale);
         }
 
-        private void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
+        void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
             if (npc == null || !npcGuards.Contains(npc)) return;
 
@@ -124,9 +124,9 @@ namespace Oxide.Plugins
         #endregion
 
         #region Core
-        private void SpawnEvent(Vector3 eventPos, Quaternion eventRot)
+        void SpawnEvent(Vector3 eventPos, Quaternion eventRot)
         {
-            CH47HelicopterAIController chinook = GameManager.server.CreateEntity(ch47Prefab, chinookStartPosition, landingRotation) as CH47HelicopterAIController;
+            CH47HelicopterAIController chinook = GameManager.server.CreateEntity(ch47Prefab, chinookPosition, landingRotation) as CH47HelicopterAIController;
             chinook.SetLandingTarget(landingPosition);
             chinook.SetMoveTarget(landingPosition);
             chinook.hoverHeight = 1.5f;
@@ -144,7 +144,9 @@ namespace Oxide.Plugins
                 NPCPlayerApex npc = mountPoint.mountable.GetMounted().GetComponent<NPCPlayerApex>();
                 if (npc == null) continue;
 
-                npc.gameObject.AddComponent<BradleyGuard>().spawnPoint = RandomCircle(eventPos, 5f);
+                BradleyGuard guard = npc.gameObject.AddComponent<BradleyGuard>();
+                guard.eventPos  = eventPos;
+                guard.eventSize = 50f;
 
                 npcGuards.Add(npc);
             }
@@ -155,17 +157,18 @@ namespace Oxide.Plugins
             MessageAll();
         }
 
-        private void CreateHackableCrate(Vector3 eventPos, Quaternion eventRot)
+        void CreateHackableCrate(Vector3 eventPos, Quaternion eventRot)
         {
             Vector3 cratePos = eventPos + (Vector3.forward * 5);
             cratePos.y += 2f;
 
             HackableLockedCrate crate = GameManager.server.CreateEntity(lockedPrefab, cratePos, eventRot) as HackableLockedCrate;
+            if (crate == null) return;
             crate.Spawn();
             crate.StartHacking();
         }
 
-        private CH47LandingZone CreateLandingZone()
+        CH47LandingZone CreateLandingZone()
         {
             return new GameObject(landingName) {
                 layer     = 16, 
@@ -176,22 +179,23 @@ namespace Oxide.Plugins
             }.AddComponent<CH47LandingZone>();
         }
 
-        private CleanUp()
+        void CleanUp()
         {
             ClearLandingZone();
             ClearGuards();
         }
 
-        private void ClearLandingZone()
+        void ClearLandingZone()
         {
             foreach(CH47LandingZone zone in UnityEngine.Object.FindObjectsOfType<CH47LandingZone>())
             {
-                if (zone.gameObject.name.Contains(landingName))
-                    UnityEngine.GameObject.Destroy(zone.gameObject);
+                if (zone.gameObject.name != landingName) continue;
+
+                UnityEngine.GameObject.Destroy(zone.gameObject);
             }
         }
 
-        private void ClearGuards()
+        void ClearGuards()
         {
             foreach(BradleyGuard guard in UnityEngine.Object.FindObjectsOfType<BradleyGuard>())
             {
@@ -201,7 +205,7 @@ namespace Oxide.Plugins
             npcGuards.Clear();
         }
 
-        private void CheckLandingPoint()
+        void CheckLandingPoint()
         {
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
@@ -211,8 +215,8 @@ namespace Oxide.Plugins
                 landingPosition   = monument.transform.position + monument.transform.right * 125f;
                 landingPosition.y += 5f;
 
-                chinookStartPosition = monument.transform.position + -monument.transform.right * 125f;
-                chinookStartPosition.y += 150f;
+                chinookPosition = monument.transform.position + -monument.transform.right * 125f;
+                chinookPosition.y += 150f;
 
                 hasLaunch = true;
             };
@@ -223,10 +227,12 @@ namespace Oxide.Plugins
         class BradleyGuard : MonoBehaviour
         {
             private NPCPlayerApex npc;
-            public Vector3 spawnPoint;
-            private bool goingBack;
+            public Vector3 roamPoint;
+            public Vector3 eventPos;
+            public float eventSize;
+            bool goingBack;
 
-            private void Awake()
+            void Awake()
             {
                 npc = gameObject.GetComponent<NPCPlayerApex>();
                 if (npc == null)
@@ -236,10 +242,12 @@ namespace Oxide.Plugins
                     return;
                 }
 
+                roamPoint                 = RandomCircle(eventPos, 5f);
                 npc.RadioEffect           = new GameObjectRef();
                 npc.DeathEffect           = new GameObjectRef();
-                npc.SpawnPosition         = spawnPoint;
-                npc.Destination           = spawnPoint;
+                npc.CurrentBehaviour      = BaseNpc.Behaviour.Wander;
+                npc.Destination           = roamPoint;
+                npc.Stats.MaxRoamRange    = eventSize * 0.5f;                
                 npc.Stats.AggressionRange = plugin.config.GuardAggressionRange;
                 npc.Stats.VisionRange     = plugin.config.GuardVisionRange;
                 npc.Stats.DeaggroRange    = plugin.config.GuardDeaggroRange;
@@ -249,57 +257,69 @@ namespace Oxide.Plugins
                 npc.Stats.OnlyAggroMarkedTargets = false;
                 npc.InitFacts();
 
+                if (npc.IsNavRunning())
+                    npc.GetNavAgent.SetDestination(roamPoint);
+                else
+                    npc.finalDestination = roamPoint;
+
                 npc.inventory.Strip();
 
                 Interface.Oxide.CallHook("GiveKit", npc, plugin.config.GuardKit);
             }
 
-            private void FixedUpdate()
-            {
-                if (npc == null || !npc.IsNavRunning()) return;
+            void FixedUpdate() => ShouldRelocate();
 
-                ShouldRelocate();
-            }
-
-            private void OnDestroy()
+            void OnDestroy()
             {
-                if (npc == null || npc.IsDestroyed) return;
+                if (npc == null || npc.IsDestroyed)
+                {
+                    return;
+                }
 
                 npc?.KillMessage();
             }
 
-            private void ShouldRelocate()
+            void ShouldRelocate()
             {
-                float distance = Vector3.Distance(transform.position, spawnPoint);
+                if (npc == null || npc.IsDestroyed)
+                {
+                    return;
+                }
+
+                float distance = Vector3.Distance(transform.position, roamPoint);
                 if(!goingBack && distance >= plugin.config.GuardMaxRoam)
                     goingBack = true;
 
                 if (goingBack && distance >= plugin.config.GuardMaxRoam)
                 {
-                    npc.GetNavAgent.SetDestination(spawnPoint);
-                    npc.Destination = spawnPoint;
+                    roamPoint = RandomCircle(eventPos, 5f);
+
+                    if (npc.IsNavRunning())
+                        npc.GetNavAgent.SetDestination(roamPoint);
+                    else
+                        npc.Destination = roamPoint;
                 }
                 else
                 {
                     goingBack = false;
                 }
             }
+
+            Vector3 RandomCircle(Vector3 center, float radius)
+            {
+                float angle = UnityEngine.Random.Range(0f, 100f) * 360;
+                Vector3 pos = center;
+                pos.x += radius * Mathf.Sin(angle * Mathf.Deg2Rad);
+                pos.z += radius * Mathf.Cos(angle * Mathf.Deg2Rad);
+                return pos;
+            }
         }
         #endregion
 
         #region Helpers
-        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+        string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        private Vector3 RandomCircle(Vector3 center, float radius)
-        {
-            float angle = UnityEngine.Random.Range(0f, 100f) * 360;
-            Vector3 pos = center;
-            pos.x += radius * Mathf.Sin(angle * Mathf.Deg2Rad);
-            pos.z += radius * Mathf.Cos(angle * Mathf.Deg2Rad);
-            return pos;
-        }
-
-        private void MessageAll()
+        void MessageAll()
         {
             foreach(BasePlayer player in BasePlayer.activePlayerList)
             {
