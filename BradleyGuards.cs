@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.5")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.6")]
     [Description("Calls in reinforcements when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -20,8 +20,8 @@ namespace Oxide.Plugins
         HashSet<NPCPlayerApex> npcGuards = new HashSet<NPCPlayerApex>();
         public static BradleyGuards plugin;
         Quaternion landingRotation;
-        Vector3 landingPosition;
         Vector3 chinookPosition;
+        Vector3 landingPosition;
         bool hasLaunch;
         #endregion
 
@@ -36,12 +36,13 @@ namespace Oxide.Plugins
             {
                 SpawnHackableCrate   = true,
                 GuardMaxSpawn        = 11, // Max is 11
-                GuardMaxRoam         = 60,
+                GuardMaxRoam         = 30,
                 GuardAggressionRange = 101f,
                 GuardVisionRange     = 103f,
                 GuardLongRange       = 100f,
                 GuardDeaggroRange    = 104f,
                 GuardDamageScale     = 0.5f,
+                GuardName            = "Guard",
                 GuardKit             = "guard"
             };
         }
@@ -56,6 +57,7 @@ namespace Oxide.Plugins
             public float GuardDamageScale;
             public int GuardMaxSpawn;
             public int GuardMaxRoam;
+            public string GuardName;
             public string GuardKit;
         }
         #endregion
@@ -79,15 +81,9 @@ namespace Oxide.Plugins
                 CreateLandingZone();
         }
 
-        void Init()
-        {
-            config = Config.ReadObject<PluginConfig>();
-        }
+        void Init() => config = Config.ReadObject<PluginConfig>();
 
-        void Unload()
-        {
-            CleanUp();
-        }
+        void Unload() => CleanUp();
 
         void OnEntitySpawned(BradleyAPC bradley)
         {
@@ -96,7 +92,10 @@ namespace Oxide.Plugins
 
         void OnEntityDeath(BradleyAPC bradley)
         {
-            if (bradley == null || !hasLaunch) return;
+            if (bradley == null || !hasLaunch)
+            {
+                return;
+            }
 
             SpawnEvent(bradley.transform.position, bradley.transform.rotation);
         }
@@ -104,15 +103,22 @@ namespace Oxide.Plugins
         void OnEntityTakeDamage(BasePlayer player, HitInfo info)
         {
             NPCPlayerApex npc = info?.Initiator as NPCPlayerApex;
-            if (npc == null || !npcGuards.Contains(npc)) return;
+            if (npc == null || !npcGuards.Contains(npc))
+            {
+                return;
+            }
 
             info.damageTypes.ScaleAll(config.GuardDamageScale);
         }
 
         void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
-            if (npc == null || !npcGuards.Contains(npc)) return;
+            if (npc == null || !npcGuards.Contains(npc))
+            {
+                return;
+            }
 
+            npc.Pause();
             npc.SetFact(NPCPlayerApex.Facts.IsMounted,         (byte) 0, true, true);
             npc.SetFact(NPCPlayerApex.Facts.WantsToDismount,   (byte) 0, true, true);
             npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
@@ -141,11 +147,10 @@ namespace Oxide.Plugins
                 NPCPlayerApex npc = mountPoint.mountable.GetMounted().GetComponent<NPCPlayerApex>();
                 if (npc == null) continue;
 
-                BradleyGuard guard = npc.gameObject.AddComponent<BradleyGuard>();
-                guard.eventPosition = eventPos;
-                guard.roamPosition  = RandomCircle(eventPos, 5f);
-                guard.roamRange     = config.GuardMaxRoam;
-                
+                BradleyGuard guard  = npc.gameObject.AddComponent<BradleyGuard>();
+                guard.spawnPosition = RandomCircle(eventPos, 10f);
+                guard.eventCenter   = eventPos;
+
                 npcGuards.Add(npc);
             }
 
@@ -209,8 +214,8 @@ namespace Oxide.Plugins
             {
                 if (!monument.gameObject.name.Contains("launch_site_1")) continue;
 
-                landingRotation   = monument.transform.rotation;
-                landingPosition   = monument.transform.position + monument.transform.right * 125f;
+                landingRotation = monument.transform.rotation;
+                landingPosition = monument.transform.position + monument.transform.right * 125f;
                 landingPosition.y += 5f;
 
                 chinookPosition = monument.transform.position + -monument.transform.right * 125f;
@@ -224,11 +229,10 @@ namespace Oxide.Plugins
         #region Classes
         class BradleyGuard : MonoBehaviour
         {
-            private NPCPlayerApex npc;
-            public Vector3 eventPosition;
-            public Vector3 roamPosition;
-            public float roamRange;
-            bool goBack;
+            NPCPlayerApex npc;
+            public Vector3 spawnPosition;
+            public Vector3 eventCenter;
+            bool moveBack;
 
             void Start()
             {
@@ -240,20 +244,12 @@ namespace Oxide.Plugins
                 }
 
                 npc.RadioEffect           = new GameObjectRef();
-                npc.DeathEffect           = new GameObjectRef();          
+                npc.DeathEffect           = new GameObjectRef();
+                npc.displayName           = plugin.config.GuardName;
                 npc.Stats.AggressionRange = plugin.config.GuardAggressionRange;
                 npc.Stats.VisionRange     = plugin.config.GuardVisionRange;
                 npc.Stats.DeaggroRange    = plugin.config.GuardDeaggroRange;
                 npc.Stats.LongRange       = plugin.config.GuardLongRange;
-                npc.Stats.Hostility       = 1f;
-                npc.Stats.Defensiveness   = 1f;
-                npc.Stats.OnlyAggroMarkedTargets = false;
-                npc.InitFacts();
-
-                if (npc.IsNavRunning())
-                    npc.GetNavAgent.SetDestination(roamPosition);
-                else
-                    npc.finalDestination = roamPosition;
 
                 npc.inventory.Strip();
 
@@ -273,21 +269,28 @@ namespace Oxide.Plugins
             {
                 if (npc == null || npc.IsDestroyed) return;
 
-                float distance = Vector3.Distance(transform.position, eventPosition);
-                if(!goBack && distance >= roamRange)
-                    goBack = true;
+                float distance  = Vector3.Distance(transform.position, eventCenter);
+                bool shouldMove = (!IsAggro() && distance >= 10 || IsAggro() && distance >= plugin.config.GuardMaxRoam);
 
-                if (goBack && distance >= roamRange)
+                if(!moveBack && shouldMove)
+                    moveBack = true;
+
+                if (moveBack && shouldMove)
                 {
                     if (npc.IsNavRunning())
-                        npc.GetNavAgent.SetDestination(roamPosition);
+                        npc.GetNavAgent.SetDestination(spawnPosition);
                     else
-                        npc.finalDestination = roamPosition;
+                        npc.finalDestination = spawnPosition;
                 }
                 else
                 {
-                    goBack = false;
+                    moveBack = false;
                 }
+            }
+
+            bool IsAggro()
+            {
+                return npc.GetFact(NPCPlayerApex.Facts.IsAggro) == 1;
             }
         }
         #endregion
