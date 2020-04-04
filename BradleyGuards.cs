@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.7")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.8")]
     [Description("Calls in reinforcements when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -16,14 +16,13 @@ namespace Oxide.Plugins
         const string lockedPrefab = "assets/prefabs/deployable/chinooklockedcrate/codelockedhackablecrate.prefab";
         const string ch47Prefab   = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
         const string landingName  = "BradleyLandingZone";
-
-        public static BradleyGuards plugin;
-
+        HashSet<CH47LandingZone> zones = new HashSet<CH47LandingZone>();
         HashSet<NPCPlayerApex> npcs = new HashSet<NPCPlayerApex>();
         Quaternion landingRotation;
+        Vector3 landingPosition;        
         Vector3 chinookPosition;
-        Vector3 landingPosition;
         bool hasLaunch;
+        static BradleyGuards plugin;
         #endregion
 
         #region Config
@@ -35,7 +34,6 @@ namespace Oxide.Plugins
         {
             return new PluginConfig
             {
-                SpawnHackableCrate   = true,
                 GuardMaxSpawn        = 11, // Max is 11
                 GuardMaxRoam         = 30,
                 GuardAggressionRange = 101f,
@@ -50,7 +48,6 @@ namespace Oxide.Plugins
 
         class PluginConfig
         {
-            public bool SpawnHackableCrate;
             public float GuardAggressionRange;
             public float GuardDeaggroRange;
             public float GuardVisionRange;
@@ -78,8 +75,14 @@ namespace Oxide.Plugins
             CheckLandingPoint();
             CleanUp();
 
-            if (hasLaunch)
-                CreateLandingZone();
+            if (!hasLaunch)
+            {
+                return;
+            }
+
+            CH47LandingZone zone = CreateLandingZone();
+
+            zones.Add(zone);
         }
 
         void Init()
@@ -87,15 +90,9 @@ namespace Oxide.Plugins
             config = Config.ReadObject<PluginConfig>();
         }
 
-        void Unload()
-        {
-            CleanUp();
-        }
+        void Unload() => CleanUp();
 
-        void OnEntitySpawned(BradleyAPC bradley)
-        {
-            ClearGuards();
-        }
+        void OnEntitySpawned(BradleyAPC bradley) => ClearGuards();
 
         void OnEntityDeath(BradleyAPC bradley)
         {
@@ -153,15 +150,19 @@ namespace Oxide.Plugins
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
 
             for (int i = 0; i < config.GuardMaxSpawn; i++)
+            {
                 chinook.SpawnScientist(chinook.transform.position + (chinook.transform.forward * 10f));
+            }
 
             for (int j = 0; j < 1; j++)
+            {
                 chinook.SpawnScientist(chinook.transform.position - (chinook.transform.forward * 5f));
+            }
 
             foreach(BaseVehicle.MountPointInfo mountPoint in chinook.mountPoints)
             {
                 NPCPlayerApex npc = mountPoint.mountable.GetMounted().GetComponent<NPCPlayerApex>();
-                if (npc == null)
+                if (npc == null || npc.IsDestroyed)
                 {
                     continue;
                 }
@@ -173,22 +174,7 @@ namespace Oxide.Plugins
                 npcs.Add(npc);
             }
 
-            if (config.SpawnHackableCrate)
-                CreateHackableCrate(eventPos, eventRot);
-
             MessageAll();
-        }
-
-        void CreateHackableCrate(Vector3 eventPos, Quaternion eventRot)
-        {
-            HackableLockedCrate crate = GameManager.server.CreateEntity(lockedPrefab, eventPos + (Vector3.forward * 5), eventRot) as HackableLockedCrate;
-            if (crate == null)
-            {
-                return;
-            }
-
-            crate.Spawn();
-            crate.StartHacking();
         }
 
         CH47LandingZone CreateLandingZone()
@@ -204,28 +190,25 @@ namespace Oxide.Plugins
 
         void CleanUp()
         {
-            ClearLandingZone();
             ClearGuards();
+            ClearZones();
         }
 
-        void ClearLandingZone()
+        void ClearZones()
         {
-            foreach(CH47LandingZone zone in UnityEngine.Object.FindObjectsOfType<CH47LandingZone>())
-            {
-                if (zone.gameObject.name != landingName)
-                {
-                    continue;
-                }
+            foreach(CH47LandingZone zone in zones) UnityEngine.GameObject.Destroy(zone.gameObject);
 
-                UnityEngine.GameObject.Destroy(zone.gameObject);
-            }
+            zones.Clear();
         }
 
         void ClearGuards()
         {
-            foreach(BradleyGuard guard in UnityEngine.Object.FindObjectsOfType<BradleyGuard>())
+            foreach(NPCPlayerApex npc in npcs)
             {
-                UnityEngine.Object.Destroy(guard);
+                if (npc != null && !npc.IsDestroyed)
+                {
+                    npc?.Kill();
+                }
             }
 
             npcs.Clear();
@@ -284,10 +267,7 @@ namespace Oxide.Plugins
                 Interface.Oxide.CallHook("GiveKit", npc, plugin.config.GuardKit);
             }
 
-            void FixedUpdate()
-            {
-                ShouldRelocate();
-            }
+            void FixedUpdate() => ShouldRelocate();
 
             void OnDestroy()
             {
@@ -296,7 +276,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                npc?.KillMessage();
+                npc?.Kill();
             }
 
             void ShouldRelocate()
@@ -310,7 +290,9 @@ namespace Oxide.Plugins
                 bool shouldMove = (!IsAggro() && distance >= 10 || IsAggro() && distance >= plugin.config.GuardMaxRoam);
 
                 if(!moveBack && shouldMove)
+                {
                     moveBack = true;
+                }
 
                 if (moveBack && shouldMove)
                 {
