@@ -76,7 +76,7 @@ namespace Oxide.Plugins
             {
                 CH47LandingZone zone = CreateLandingZone();
 
-                _zones.Add(zone);                
+                _zones.Add(zone);
             }
         }
 
@@ -97,7 +97,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            SpawnEvent(bradley.transform.position, bradley.transform.rotation);
+            SpawnEvent(bradley.transform.position);
         }
 
         void OnEntityTakeDamage(BasePlayer player, HitInfo info)
@@ -131,7 +131,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Core
-        void SpawnEvent(Vector3 eventPos, Quaternion eventRot)
+        void SpawnEvent(Vector3 eventPos)
         {
             CH47HelicopterAIController chinook = GameManager.server.CreateEntity(_ch47Prefab, _chinookPosition, _landingRotation) as CH47HelicopterAIController;
             if (chinook == null)
