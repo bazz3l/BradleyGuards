@@ -42,7 +42,8 @@ namespace Oxide.Plugins
                 GuardDeaggroRange = 154f,
                 GuardDamageScale = 0.5f,
                 GuardName = "Guard",
-                GuardKit = "guard"
+                KitName = "guard",
+                UseKit = false
             };
         }
 
@@ -56,7 +57,8 @@ namespace Oxide.Plugins
             public int GuardMaxSpawn;
             public int GuardMaxRoam;
             public string GuardName;
-            public string GuardKit;
+            public string KitName;
+            public bool UseKit;
         }
         #endregion
 
@@ -191,7 +193,12 @@ namespace Oxide.Plugins
 
             _npcs.Add(npc);
 
-            Interface.Oxide.CallHook("GiveKit", npc, _config.GuardKit);
+            if (_config.UseKit)
+            {
+                npc.inventory.Strip();
+
+                Interface.Oxide.CallHook("GiveKit", npc, _config.KitName);
+            }
         }
 
         CH47LandingZone CreateLandingZone()
