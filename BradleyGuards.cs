@@ -109,13 +109,10 @@ namespace Oxide.Plugins
             }
 
             NPCPlayerApex npc = info.Initiator as NPCPlayerApex;
-
-            if (npc == null || !_npcs.Contains(npc))
+            if (npc != null && _npcs.Contains(npc))
             {
-                return;
+                info.damageTypes.ScaleAll(_config.GuardDamageScale);
             }
-
-            info.damageTypes.ScaleAll(_config.GuardDamageScale);
         }
 
         void OnEntityDeath(NPCPlayerApex npc, HitInfo info)
@@ -190,7 +187,7 @@ namespace Oxide.Plugins
             npc.Stats.Hostility = 1;
             npc.Stats.Defensiveness = 1;
             npc.InitFacts();
-            npc.gameObject.AddComponent<BradleyGuard>().eventCenter = eventPos;
+            npc.gameObject.AddComponent<BradleyGuard>().eventPos = eventPos;
 
             _npcs.Add(npc);
 
@@ -264,7 +261,7 @@ namespace Oxide.Plugins
             NPCPlayerApex _npc;
             Vector3 _spawnPosition;
             bool _moveBack;
-            public Vector3 eventCenter;
+            public Vector3 eventPos;
 
             void Start()
             {
@@ -276,7 +273,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                _spawnPosition = plugin.RandomCircle(eventCenter, 10f);
+                _spawnPosition = plugin.RandomCircle(eventPos, 10f);
             }
 
             void FixedUpdate() => ShouldRelocate();
@@ -298,7 +295,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                float distance  = Vector3.Distance(transform.position, eventCenter);
+                float distance  = Vector3.Distance(transform.position, eventPos);
                 bool shouldMove = (!IsAggro() && distance >= 10 || IsAggro() && distance >= plugin._config.GuardMaxRoam);
 
                 if(!_moveBack && shouldMove)
