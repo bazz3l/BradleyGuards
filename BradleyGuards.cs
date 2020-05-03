@@ -64,7 +64,8 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-                {"EventStart", "<color=#DC143C>Bradley Reinforcements</color>: stay clear or fight for the loot."}
+                {"EventStart", "<color=#DC143C>Bradley Guards</color>: reinforcements inbound."},
+                {"EventEnded", "<color=#DC143C>Bradley Guards</color>: reinforcements down loot up fast."},
             }, this);
         }
 
@@ -108,7 +109,8 @@ namespace Oxide.Plugins
             }
 
             NPCPlayerApex npc = info.Initiator as NPCPlayerApex;
-            if (npc.GetComponent<BradleyGuard>() == null)
+
+            if (npc == null || !_npcs.Contains(npc))
             {
                 return;
             }
@@ -116,9 +118,24 @@ namespace Oxide.Plugins
             info.damageTypes.ScaleAll(_config.GuardDamageScale);
         }
 
+        void OnEntityDeath(NPCPlayerApex npc, HitInfo info)
+        {
+            if (npc == null || !_npcs.Contains(npc))
+            {
+                return;
+            }
+
+            _npcs.Remove(npc);
+
+            if (_npcs.Count == 0)
+            {
+                MessageAll("EventEnded");
+            }
+        }
+
         void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
-            if (npc.GetComponent<BradleyGuard>() == null)
+            if (npc == null || !_npcs.Contains(npc))
             {
                 return;
             }
@@ -155,7 +172,7 @@ namespace Oxide.Plugins
                 SpawnScientist(chinook, chinook.transform.position - (chinook.transform.forward * 5f), eventPos);
             }
 
-            MessageAll();
+            MessageAll("EventStart");
         }
 
         void SpawnScientist(CH47HelicopterAIController chinook, Vector3 spawnPos, Vector3 eventPos)
@@ -321,7 +338,7 @@ namespace Oxide.Plugins
             return pos;
         }
 
-        void MessageAll()
+        void MessageAll(string key)
         {
             foreach(BasePlayer player in BasePlayer.activePlayerList)
             {
@@ -330,7 +347,7 @@ namespace Oxide.Plugins
                     continue;
                 }
 
-                player.ChatMessage(Lang("EventStart", player.UserIDString));
+                player.ChatMessage(Lang(key, player.UserIDString));
             }
         }
         #endregion
