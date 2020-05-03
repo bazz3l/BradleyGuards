@@ -34,15 +34,15 @@ namespace Oxide.Plugins
         {
             return new PluginConfig
             {
-                GuardMaxSpawn        = 11, // Max is 11
-                GuardMaxRoam         = 30,
-                GuardAggressionRange = 101f,
-                GuardVisionRange     = 103f,
-                GuardLongRange       = 100f,
-                GuardDeaggroRange    = 104f,
-                GuardDamageScale     = 0.5f,
-                GuardName            = "Guard",
-                GuardKit             = "guard"
+                GuardMaxSpawn = 11, // Max is 11
+                GuardMaxRoam = 30,
+                GuardAggressionRange = 151f,
+                GuardVisionRange = 153f,
+                GuardLongRange = 150f,
+                GuardDeaggroRange = 154f,
+                GuardDamageScale = 0.5f,
+                GuardName = "Guard",
+                GuardKit = "guard"
             };
         }
 
@@ -229,14 +229,14 @@ namespace Oxide.Plugins
                     continue;
                 }
 
+                _hasLaunch = true;                
+
                 _landingRotation = monument.transform.rotation;
                 _landingPosition = monument.transform.position + monument.transform.right * 125f;
                 _landingPosition.y += 5f;
 
                 _chinookPosition = monument.transform.position + -monument.transform.right * 125f;
                 _chinookPosition.y += 150f;
-
-                _hasLaunch = true;
             };
         }
         #endregion
