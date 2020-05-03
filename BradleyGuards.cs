@@ -35,7 +35,7 @@ namespace Oxide.Plugins
             return new PluginConfig
             {
                 GuardMaxSpawn = 11, // Max is 11
-                GuardMaxRoam = 30,
+                GuardMaxRoam = 80,
                 GuardAggressionRange = 151f,
                 GuardVisionRange = 153f,
                 GuardLongRange = 150f,
