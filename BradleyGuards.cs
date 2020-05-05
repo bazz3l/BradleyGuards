@@ -40,7 +40,6 @@ namespace Oxide.Plugins
                 GuardVisionRange = 153f,
                 GuardLongRange = 150f,
                 GuardDeaggroRange = 154f,
-                GuardDamageScale = 0.5f,
                 GuardName = "Guard",
                 UseKit = false,
                 NPCKits = new List<string> {
@@ -56,7 +55,6 @@ namespace Oxide.Plugins
             public float GuardDeaggroRange;
             public float GuardVisionRange;
             public float GuardLongRange;
-            public float GuardDamageScale;
             public int GuardMaxSpawn;
             public int GuardMaxRoam;
             public string GuardName;
@@ -104,20 +102,6 @@ namespace Oxide.Plugins
             }
 
             SpawnEvent(bradley.transform.position);
-        }
-
-        void OnEntityTakeDamage(BasePlayer player, HitInfo info)
-        {
-            if (info == null || info?.Initiator == null || !(info?.Initiator is NPCPlayerApex))
-            {
-                return;
-            }
-
-            NPCPlayerApex npc = info.Initiator as NPCPlayerApex;
-            if (npc != null && _npcs.Contains(npc))
-            {
-                info.damageTypes.ScaleAll(_config.GuardDamageScale);
-            }
         }
 
         void OnEntityDeath(NPCPlayerApex npc, HitInfo info)
