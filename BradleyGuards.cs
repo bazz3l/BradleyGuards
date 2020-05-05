@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.9")]
+    [Info("Bradley Guards", "Bazz3l", "1.2.0")]
     [Description("Calls in reinforcements when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -35,15 +35,18 @@ namespace Oxide.Plugins
             return new PluginConfig
             {
                 GuardMaxSpawn = 11, // Max is 11
-                GuardMaxRoam = 80,
+                GuardMaxRoam = 150,
                 GuardAggressionRange = 151f,
                 GuardVisionRange = 153f,
                 GuardLongRange = 150f,
                 GuardDeaggroRange = 154f,
                 GuardDamageScale = 0.5f,
                 GuardName = "Guard",
-                KitName = "guard",
-                UseKit = false
+                UseKit = false,
+                NPCKits = new List<string> {
+                    "guard",
+                    "guard-heavy"
+                }
             };
         }
 
@@ -57,8 +60,8 @@ namespace Oxide.Plugins
             public int GuardMaxSpawn;
             public int GuardMaxRoam;
             public string GuardName;
-            public string KitName;
             public bool UseKit;
+            public List<string> NPCKits;
         }
         #endregion
 
@@ -193,12 +196,14 @@ namespace Oxide.Plugins
 
             _npcs.Add(npc);
 
-            if (_config.UseKit)
+            if (!_config.UseKit)
             {
-                npc.inventory.Strip();
-
-                Interface.Oxide.CallHook("GiveKit", npc, _config.KitName);
+                return;
             }
+
+            npc.inventory.Strip();
+                
+            Interface.Oxide.CallHook("GiveKit", npc, _config.NPCKits.GetRandom());
         }
 
         CH47LandingZone CreateLandingZone()
