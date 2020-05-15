@@ -41,7 +41,7 @@ namespace Oxide.Plugins
                 GuardLongRange = 150f,
                 GuardDeaggroRange = 154f,
                 GuardName = "Guard",
-                CrateAmount = 4,
+                MaxCratesToSpawn = 4,
                 UseKit = true,
                 NPCKits = new List<string> {
                     "guard",
