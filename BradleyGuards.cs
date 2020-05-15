@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.2.0")]
+    [Info("Bradley Guards", "Bazz3l", "1.2.1")]
     [Description("Calls in reinforcements when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -24,7 +24,7 @@ namespace Oxide.Plugins
         Vector3 _chinookPosition;
         bool _hasLaunch;
 
-        public static BradleyGuards plugin;
+        static BradleyGuards plugin;
         #endregion
 
         #region Config
@@ -34,14 +34,15 @@ namespace Oxide.Plugins
         {
             return new PluginConfig
             {
-                GuardMaxSpawn = 11, // Max is 11
+                GuardMaxSpawn = 10, // Max is 11
                 GuardMaxRoam = 150,
                 GuardAggressionRange = 151f,
                 GuardVisionRange = 153f,
                 GuardLongRange = 150f,
                 GuardDeaggroRange = 154f,
                 GuardName = "Guard",
-                UseKit = false,
+                CrateAmount = 4,
+                UseKit = true,
                 NPCKits = new List<string> {
                     "guard",
                     "guard-heavy"
@@ -58,6 +59,7 @@ namespace Oxide.Plugins
             public int GuardMaxSpawn;
             public int GuardMaxRoam;
             public string GuardName;
+            public int CrateAmount;
             public bool UseKit;
             public List<string> NPCKits;
         }
@@ -67,8 +69,8 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-                {"EventStart", "<color=#DC143C>Bradley Guards</color>: reinforcements inbound."},
-                {"EventEnded", "<color=#DC143C>Bradley Guards</color>: reinforcements down loot up fast."},
+                {"EventStart", "<color=#DC143C>Bradley Guards</color>: Bradley down, reinforcements flying in prepare to fight."},
+                {"EventEnded", "<color=#DC143C>Bradley Guards</color>: Reinforcements down."},
             }, this);
         }
 
@@ -76,12 +78,11 @@ namespace Oxide.Plugins
         {
             CheckLandingPoint();
 
-            if (_hasLaunch)
-            {
-                CH47LandingZone zone = CreateLandingZone();
+            if (!_hasLaunch) return;
 
-                _zones.Add(zone);
-            }
+            CH47LandingZone zone = CreateLandingZone();
+
+            _zones.Add(zone);
         }
 
         void Init()
@@ -92,24 +93,23 @@ namespace Oxide.Plugins
 
         void Unload() => CleanUp();
 
-        void OnEntitySpawned(BradleyAPC bradley) => ClearGuards();
+        void OnEntitySpawned(BradleyAPC bradley)
+        {
+            bradley.maxCratesToSpawn = _config.CrateAmount;
+            
+            ClearGuards();
+        }
 
         void OnEntityDeath(BradleyAPC bradley)
         {
-            if (bradley == null || !_hasLaunch)
-            {
-                return;
-            }
+            if (bradley == null || !_hasLaunch) return;
 
             SpawnEvent(bradley.transform.position);
         }
 
         void OnEntityDeath(NPCPlayerApex npc, HitInfo info)
         {
-            if (npc == null || !_npcs.Contains(npc))
-            {
-                return;
-            }
+            if (npc == null || !_npcs.Contains(npc)) return;
 
             _npcs.Remove(npc);
 
@@ -121,10 +121,7 @@ namespace Oxide.Plugins
 
         void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
-            if (npc == null || !_npcs.Contains(npc))
-            {
-                return;
-            }
+            if (npc == null || !_npcs.Contains(npc)) return;
 
             npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
             npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
@@ -137,10 +134,7 @@ namespace Oxide.Plugins
         void SpawnEvent(Vector3 eventPos)
         {
             CH47HelicopterAIController chinook = GameManager.server.CreateEntity(_ch47Prefab, _chinookPosition, _landingRotation) as CH47HelicopterAIController;
-            if (chinook == null)
-            {
-                return;
-            }
+            if (chinook == null) return;
 
             chinook.SetLandingTarget(_landingPosition);
             chinook.SetMoveTarget(_landingPosition);
@@ -164,6 +158,8 @@ namespace Oxide.Plugins
         void SpawnScientist(CH47HelicopterAIController chinook, Vector3 spawnPos, Vector3 eventPos)
         {
             NPCPlayerApex npc = GameManager.server.CreateEntity(chinook.scientistPrefab.resourcePath, spawnPos, Quaternion.identity) as NPCPlayerApex;
+            if (npc == null) return;
+
             npc.Spawn();
             npc.Mount((BaseMountable)chinook);
             npc.RadioEffect = new GameObjectRef();
@@ -180,10 +176,7 @@ namespace Oxide.Plugins
 
             _npcs.Add(npc);
 
-            if (!_config.UseKit)
-            {
-                return;
-            }
+            if (!_config.UseKit) return;
 
             npc.inventory.Strip();
                 
@@ -234,18 +227,15 @@ namespace Oxide.Plugins
         {
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
-                if (!monument.gameObject.name.Contains("launch_site_1"))
-                {
-                    continue;
-                }
+                if (!monument.gameObject.name.Contains("launch_site_1")) continue;
 
-                _hasLaunch = true;                
+                _hasLaunch = true;          
 
                 _landingRotation = monument.transform.rotation;
                 _landingPosition = monument.transform.position + monument.transform.right * 125f;
                 _landingPosition.y += 5f;
 
-                _chinookPosition = monument.transform.position + -monument.transform.right * 125f;
+                _chinookPosition = monument.transform.position + -monument.transform.right * 250f;
                 _chinookPosition.y += 150f;
             };
         }
@@ -276,20 +266,14 @@ namespace Oxide.Plugins
 
             void OnDestroy()
             {
-                if (_npc == null || _npc.IsDestroyed)
-                {
-                    return;
-                }
+                if (_npc == null || _npc.IsDestroyed) return;
 
                 _npc?.Kill();
             }
 
             void ShouldRelocate()
             {
-                if (_npc == null || _npc.IsDestroyed || _npc.isMounted)
-                {
-                    return;
-                }
+                if (_npc == null || _npc.IsDestroyed || _npc.isMounted) return;
 
                 float distance  = Vector3.Distance(transform.position, eventPos);
                 bool shouldMove = (!IsAggro() && distance >= 10 || IsAggro() && distance >= plugin._config.GuardMaxRoam);
@@ -335,10 +319,7 @@ namespace Oxide.Plugins
         {
             foreach(BasePlayer player in BasePlayer.activePlayerList)
             {
-                if (player == null || !player.IsConnected)
-                {
-                    continue;
-                }
+                if (player == null || !player.IsConnected) continue;
 
                 player.ChatMessage(Lang(key, player.UserIDString));
             }
@@ -346,3 +327,4 @@ namespace Oxide.Plugins
         #endregion
     }
 }
+
