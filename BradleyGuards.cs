@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.2.1")]
+    [Info("Bradley Guards", "Bazz3l", "1.2.2")]
     [Description("Calls in reinforcements when bradley is taken down")]
     class BradleyGuards : RustPlugin
     {
@@ -59,7 +59,7 @@ namespace Oxide.Plugins
             public int GuardMaxSpawn;
             public int GuardMaxRoam;
             public string GuardName;
-            public int CrateAmount;
+            public int MaxCratesToSpawn;
             public bool UseKit;
             public List<string> NPCKits;
         }
@@ -95,7 +95,7 @@ namespace Oxide.Plugins
 
         void OnEntitySpawned(BradleyAPC bradley)
         {
-            bradley.maxCratesToSpawn = _config.CrateAmount;
+            bradley.maxCratesToSpawn = _config.MaxCratesToSpawn;
             
             ClearGuards();
         }
