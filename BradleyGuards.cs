@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using Newtonsoft.Json;
 using UnityEngine;
 using Oxide.Core;
 using Oxide.Core.Plugins;
@@ -38,33 +39,68 @@ namespace Oxide.Plugins
             return new PluginConfig
             {
                 GuardMaxSpawn = 10, // Max is 11
-                GuardMaxRoam = 150,
-                GuardAggressionRange = 151f,
-                GuardVisionRange = 153f,
-                GuardLongRange = 150f,
-                GuardDeaggroRange = 154f,
-                GuardName = "Guard",
-                CrateAmount = 4,
-                UseKit = false,
-                NPCKits = new List<string> {
-                    "guard",
-                    "guard-heavy"
+                CrateAmount   = 4,
+                GuardSettings = new List<GuardSetting> {
+                    new GuardSetting("Guard", "guard", 100f),
+                    new GuardSetting("Heavy Guard", "guard-heavy", 300f)
                 }
             };
         }
 
         class PluginConfig
         {
-            public float GuardAggressionRange;
-            public float GuardDeaggroRange;
-            public float GuardVisionRange;
-            public float GuardLongRange;
-            public int GuardMaxSpawn;
-            public int GuardMaxRoam;
-            public string GuardName;
+            [JsonProperty(PropertyName = "CrateAmount (max amount of crates bradley will spawn)")]
             public int CrateAmount;
-            public bool UseKit;
-            public List<string> NPCKits;
+
+            [JsonProperty(PropertyName = "GuardMaxSpawn (max number of guard to spawn note: 11 is max)")]
+            public int GuardMaxSpawn;            
+
+            [JsonProperty(PropertyName = "GuardSettings (create different types of guard must contain atleast 1)")]
+            public List<GuardSetting> GuardSettings;
+        }
+
+        class GuardSetting
+        {
+            [JsonProperty(PropertyName = "Name (npc display name)")]
+            public string Name;
+
+            [JsonProperty(PropertyName = "Kit (kit name)")]
+            public string Kit;
+
+            [JsonProperty(PropertyName = "Health (sets the health of npc)")]
+            public float Health = 100f;
+
+            [JsonProperty(PropertyName = "MinRoamRadius (min roam radius)")]
+            public float MinRoamRadius;
+
+            [JsonProperty(PropertyName = "MaxRoamRadius (max roam radius)")]
+            public float MaxRoamRadius;
+
+            [JsonProperty(PropertyName = "AggressionRange (distance they become agressive)")]
+            public float AggressionRange = 151f;
+
+            [JsonProperty(PropertyName = "VisionRange (distance they are alerted)")]
+            public float VisionRange = 153f;
+
+            [JsonProperty(PropertyName = "DeaggroRange (distance they will deaggro)")]
+            public float DeaggroRange = 154f;
+
+            [JsonProperty(PropertyName = "MaxRange (max distance they will shoot)")]
+            public float MaxRange = 150f;
+
+            [JsonProperty(PropertyName = "UseKit (should use kit)")]
+            public bool UseKit = false;
+
+            public GuardSetting(string name, string kit, float health, float minRoamRadius = 30f, float maxRoamRadius = 80f)
+            {
+                Name = name;
+                Kit = kit;
+                Health = health;
+                MinRoamRadius = minRoamRadius;
+                MaxRoamRadius = maxRoamRadius;
+            }
+
+            public float GetRoamRange() => UnityEngine.Random.Range(MinRoamRadius, MaxRoamRadius);
         }
         #endregion
 
@@ -134,7 +170,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Core
-        void SpawnEvent(Vector3 eventPos)
+        void SpawnEvent(Vector3 position)
         {
             CH47HelicopterAIController chinook = GameManager.server.CreateEntity(_ch47Prefab, _chinookPosition, _landingRotation) as CH47HelicopterAIController;
             if (chinook == null) return;
@@ -147,18 +183,18 @@ namespace Oxide.Plugins
 
             for (int i = 0; i < _config.GuardMaxSpawn; i++)
             {
-                SpawnScientist(chinook, chinook.transform.position + (chinook.transform.forward * 10f), eventPos);
+                SpawnScientist(chinook, _config.GuardSettings.GetRandom(), chinook.transform.position + (chinook.transform.forward * 10f), position);
             }
 
             for (int j = 0; j < 1; j++)
             {
-                SpawnScientist(chinook, chinook.transform.position - (chinook.transform.forward * 5f), eventPos);
+                SpawnScientist(chinook, _config.GuardSettings.GetRandom(), chinook.transform.position - (chinook.transform.forward * 5f), position);
             }
 
             MessageAll("EventStart");
         }
 
-        void SpawnScientist(CH47HelicopterAIController chinook, Vector3 position, Vector3 eventPos)
+        void SpawnScientist(CH47HelicopterAIController chinook, GuardSetting settings, Vector3 position, Vector3 eventPos)
         {
             BaseEntity entity = GameManager.server.CreateEntity(chinook.scientistPrefab.resourcePath, position, Quaternion.identity);
 
@@ -170,25 +206,25 @@ namespace Oxide.Plugins
 
                 component.CancelInvoke(component.EquipTest);
                 component.CancelInvoke(component.RadioChatter);
-                component.startHealth = 100f;
+                component.startHealth = settings.Health;
                 component.InitializeHealth(component.startHealth, component.startHealth);
                 component.RadioEffect           = new GameObjectRef();
                 component.CommunicationRadius   = 0;
-                component.displayName           = _config.GuardName;
-                component.Stats.AggressionRange = _config.GuardAggressionRange;
-                component.Stats.VisionRange     = _config.GuardVisionRange;
-                component.Stats.DeaggroRange    = _config.GuardDeaggroRange;
-                component.Stats.LongRange       = _config.GuardLongRange;
-                component.Stats.MaxRoamRange    = _config.GuardMaxRoam;
+                component.displayName           = settings.Name;
+                component.Stats.AggressionRange = settings.AggressionRange;
+                component.Stats.VisionRange     = settings.VisionRange;
+                component.Stats.DeaggroRange    = settings.DeaggroRange;
+                component.Stats.LongRange       = settings.MaxRange;
+                component.Stats.MaxRoamRange    = settings.MaxRoamRadius;
                 component.Stats.Hostility       = 1;
                 component.Stats.Defensiveness   = 1;
                 component.InitFacts();
                 component.Mount((BaseMountable)chinook);
-                component.gameObject.AddComponent<BradleyGuard>()?.Init(plugin._config.GuardMaxRoam, RandomCircle(eventPos, 10));
+                component.gameObject.AddComponent<BradleyGuard>()?.Init(settings.GetRoamRange(), RandomCircle(eventPos, 10));
 
                 _npcs.Add(component);
 
-                timer.In(1f, () => GiveKit(component, _config.NPCKits.GetRandom(), _config.UseKit));
+                timer.In(1f, () => GiveKit(component, settings.Kit, settings.UseKit));
             }
             else
             {
@@ -196,13 +232,13 @@ namespace Oxide.Plugins
             }
         }
 
-        void GiveKit(NPCPlayerApex npc, string kitName, bool give)
+        void GiveKit(NPCPlayerApex npc, string kit, bool give)
         {
             if (!give) return;
 
             npc.inventory.Strip();
 
-            Interface.Oxide.CallHook("GiveKit", npc, kitName);
+            Interface.Oxide.CallHook("GiveKit", npc, kit);
         }
 
         CH47LandingZone CreateLandingZone()
@@ -304,9 +340,7 @@ namespace Oxide.Plugins
 
                 float distance = Vector3.Distance(transform.position, _targetDestination);
 
-                bool moveback = distance >= 10 || distance >= _maxRoamDistance;
-
-                if (_npc.AttackTarget == null && moveback || _npc.AttackTarget != null && moveback)
+                if (_npc.AttackTarget == null && distance >= 10 || _npc.AttackTarget != null && distance >= _maxRoamDistance)
                 {
                     if (_npc.GetNavAgent == null || !_npc.GetNavAgent.isOnNavMesh)
                         _npc.finalDestination = _targetDestination;
@@ -314,7 +348,7 @@ namespace Oxide.Plugins
                         _npc.GetNavAgent.SetDestination(_targetDestination);
 
                     _npc.Destination = _targetDestination;
-                    _npc.SetFact(NPCPlayerApex.Facts.Speed, moveback ? (byte)NPCPlayerApex.SpeedEnum.Sprint : (byte)NPCPlayerApex.SpeedEnum.Walk, true, true);
+                    _npc.SetFact(NPCPlayerApex.Facts.Speed, (byte)NPCPlayerApex.SpeedEnum.Sprint, true, true);
                 }
             }
         }
@@ -342,4 +376,3 @@ namespace Oxide.Plugins
         #endregion
     }
 }
-
