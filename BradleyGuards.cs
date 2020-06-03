@@ -9,7 +9,7 @@ using Oxide.Core.Plugins;
 namespace Oxide.Plugins
 {
     [Info("Bradley Guards", "Bazz3l", "1.2.2")]
-    [Description("Calls in reinforcements when bradley is taken down")]
+    [Description("Calls for reinforcements when bradley is destroyed.")]
     class BradleyGuards : RustPlugin
     {
         [PluginReference] Plugin Kits;
@@ -27,6 +27,7 @@ namespace Oxide.Plugins
         Vector3 _landingPosition;
         Vector3 _chinookPosition;
         bool _hasLaunch;
+        bool _eventActive;
 
         static BradleyGuards plugin;
         #endregion
@@ -105,8 +106,8 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-                {"EventStart", "<color=#DC143C>Bradley Guards</color>: Bradley down, reinforcements flying in prepare to fight."},
-                {"EventEnded", "<color=#DC143C>Bradley Guards</color>: Reinforcements down."},
+                {"EventStart", "<color=#DC143C>Bradley Guards</color>: Bradley called in reinforcements, prepare to fight."},
+                {"EventEnded", "<color=#DC143C>Bradley Guards</color>: All reinforcements are down."},
             }, this);
         }
 
@@ -124,6 +125,7 @@ namespace Oxide.Plugins
         void Init()
         {
             plugin = this;
+
             _config = Config.ReadObject<PluginConfig>();
         }
 
@@ -134,14 +136,11 @@ namespace Oxide.Plugins
             bradley.maxCratesToSpawn = _config.CrateAmount;
             
             ClearGuards();
+
+            _eventActive = false;
         }
 
-        void OnEntityDeath(BradleyAPC bradley)
-        {
-            if (bradley == null || !_hasLaunch) return;
-
-            SpawnEvent(bradley.transform.position);
-        }
+        void OnEntityTakeDamage(BradleyAPC bradley, HitInfo info) => SpawnEvent(bradley.transform.position);
 
         void OnEntityDeath(NPCPlayerApex npc, HitInfo info)
         {
@@ -169,6 +168,8 @@ namespace Oxide.Plugins
         #region Core
         void SpawnEvent(Vector3 position)
         {
+            if (!_hasLaunch || _eventActive) return;
+
             CH47HelicopterAIController chinook = GameManager.server.CreateEntity(_ch47Prefab, _chinookPosition, _landingRotation) as CH47HelicopterAIController;
             if (chinook == null) return;
 
@@ -187,6 +188,8 @@ namespace Oxide.Plugins
             {
                 SpawnScientist(chinook, _config.GuardSettings.GetRandom(), chinook.transform.position - (chinook.transform.forward * 5f), position);
             }
+
+            _eventActive = true;
 
             MessageAll("EventStart");
         }
