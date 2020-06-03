@@ -209,14 +209,12 @@ namespace Oxide.Plugins
                 component.CommunicationRadius   = 0;
                 component.displayName           = settings.Name;
                 component.Stats.AggressionRange = component.Stats.DeaggroRange = settings.ChaseDistance;
-                component.Stats.VisionRange     = settings.VisionRange;
-                component.Stats.LongRange       = settings.MaxRange;
                 component.Stats.MaxRoamRange    = settings.GetRoamRange();
                 component.Stats.Hostility       = 1;
                 component.Stats.Defensiveness   = 1;
                 component.InitFacts();
                 component.Mount((BaseMountable)chinook);
-                component.gameObject.AddComponent<BradleyGuard>()?.Init(component.Stats.MaxRoamRange, RandomCircle(eventPos, 10));
+                component.gameObject.AddComponent<BradleyGuard>()?.Init(RandomCircle(eventPos, 10));
 
                 _npcs.Add(component);
 
@@ -300,11 +298,9 @@ namespace Oxide.Plugins
         {
             NPCPlayerApex _npc;
             Vector3 _targetDestination;
-            float _maxRoamDistance;
 
-            public void Init(float maxRoamDistance, Vector3 targetDestination)
+            public void Init(Vector3 targetDestination)
             {
-                _maxRoamDistance    = maxRoamDistance;
                 _targetDestination  = targetDestination;
                 _npc.ServerPosition = targetDestination;
             }
@@ -332,11 +328,11 @@ namespace Oxide.Plugins
 
             void ShouldRelocate()
             {
-                if (_npc == null || _npc.IsDestroyed || _npc.isMounted) return;
+                if (_npc == null || _npc.IsDestroyed) return;
 
                 float distance = Vector3.Distance(transform.position, _targetDestination);
 
-                if (_npc.AttackTarget == null && distance >= 10 || _npc.AttackTarget != null && distance >= _maxRoamDistance)
+                if (_npc.AttackTarget == null && distance > 15f || _npc.AttackTarget != null && distance > _npc.Stats.MaxRoamRange)
                 {
                     if (_npc.GetNavAgent == null || !_npc.GetNavAgent.isOnNavMesh)
                         _npc.finalDestination = _targetDestination;
