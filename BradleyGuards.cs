@@ -27,7 +27,6 @@ namespace Oxide.Plugins
         Vector3 _landingPosition;
         Vector3 _chinookPosition;
         bool _hasLaunch;
-        bool _eventActive;
 
         static BradleyGuards plugin;
         #endregion
@@ -136,11 +135,9 @@ namespace Oxide.Plugins
             bradley.maxCratesToSpawn = _config.CrateAmount;
             
             ClearGuards();
-
-            _eventActive = false;
         }
 
-        void OnEntityTakeDamage(BradleyAPC bradley, HitInfo info) => SpawnEvent(bradley.transform.position);
+        void OnEntityDeath(BradleyAPC bradley, HitInfo info) => SpawnEvent(bradley.transform.position);
 
         void OnEntityDeath(NPCPlayerApex npc, HitInfo info)
         {
@@ -168,7 +165,7 @@ namespace Oxide.Plugins
         #region Core
         void SpawnEvent(Vector3 position)
         {
-            if (!_hasLaunch || _eventActive) return;
+            if (!_hasLaunch) return;
 
             CH47HelicopterAIController chinook = GameManager.server.CreateEntity(_ch47Prefab, _chinookPosition, _landingRotation) as CH47HelicopterAIController;
             if (chinook == null) return;
@@ -188,8 +185,6 @@ namespace Oxide.Plugins
             {
                 SpawnScientist(chinook, _config.GuardSettings.GetRandom(), chinook.transform.position - (chinook.transform.forward * 5f), position);
             }
-
-            _eventActive = true;
 
             MessageAll("EventStart");
         }
@@ -221,7 +216,7 @@ namespace Oxide.Plugins
 
                 _npcs.Add(component);
 
-                timer.In(1f, () => GiveKit(component, settings.Kit, settings.UseKit));
+                GiveKit(component, settings.Kit, settings.UseKit);
             }
             else
             {
