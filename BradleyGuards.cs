@@ -55,7 +55,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "GuardMaxSpawn (max number of guard to spawn note: 11 is max)")]
             public int GuardMaxSpawn;
 
-            [JsonProperty(PropertyName = "GuardSettings (create different types of guard must contain atleast 1)")]
+            [JsonProperty(PropertyName = "GuardSettings (create different types of guards must contain atleast 1)")]
             public List<GuardSetting> GuardSettings;
         }
 
