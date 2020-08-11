@@ -368,7 +368,7 @@ namespace Oxide.Plugins
             {
                 float distance = Vector3.Distance(transform.position, TargetPoint);
 
-                if (npc == null || npc.isMounted || !npc.NavAgent.isActiveAndEnabled)
+                if (npc == null || npc.isMounted)
                 {
                     return;
                 }
