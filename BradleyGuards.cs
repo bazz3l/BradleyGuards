@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using System;
 using Oxide.Core.Plugins;
 using Oxide.Core;
@@ -19,12 +18,12 @@ namespace Oxide.Plugins
         const string ch47Prefab = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
         const string landingName = "BradleyLandingZone";
 
-        HashSet<CH47LandingZone> zones = new HashSet<CH47LandingZone>();
         HashSet<NPCPlayerApex> npcs = new HashSet<NPCPlayerApex>();
-
+        CH47LandingZone landingZone;
         PluginConfig config;
         Quaternion landingRotation;
         Vector3 landingPosition;
+        Quaternion chinookRotation;
         Vector3 chinookPosition;
         Vector3 bradleyPosition;
         bool hasLaunch;
@@ -39,10 +38,10 @@ namespace Oxide.Plugins
         {
             return new PluginConfig
             {
-                GuardMaxSpawn = 11, // Max is 11
+                GuardMaxSpawn = 12, // Max is 12
                 CrateAmount   = 4,
                 GuardSettings = new List<GuardSetting> {
-                    new GuardSetting("Heavy Gunner", 100f)
+                    new GuardSetting("Heavy Gunner", 300f)
                 }
             };
         }
@@ -97,19 +96,7 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        void OnServerInitialized()
-        {
-            CheckLandingPoint();
-
-            if (!hasLaunch)
-            {
-                return;
-            }
-
-            CH47LandingZone zone = CreateLandingZone();
-
-            zones.Add(zone);
-        }
+        void OnServerInitialized() => GetLandingPoint();
 
         void Init()
         {
@@ -153,7 +140,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            CH47HelicopterAIController chinook = GameManager.server.CreateEntity(ch47Prefab, chinookPosition, landingRotation) as CH47HelicopterAIController;
+            CH47HelicopterAIController chinook = GameManager.server.CreateEntity(ch47Prefab, chinookPosition, chinookRotation) as CH47HelicopterAIController;
             if (chinook == null)
             {
                 return;
@@ -165,7 +152,7 @@ namespace Oxide.Plugins
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
 
-            for (int i = 0; i < config.GuardMaxSpawn; i++)
+            for (int i = 0; i < config.GuardMaxSpawn - 2; i++)
             {
                 SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position + (chinook.transform.forward * 10f), position);
             }
@@ -174,8 +161,6 @@ namespace Oxide.Plugins
             {
                 SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position - (chinook.transform.forward * 5f), position);
             }
-
-            ClearFireBalls(position);
 
             MessageAll("EventStart");
         }
@@ -211,7 +196,7 @@ namespace Oxide.Plugins
                 GiveKit(npc, settings.KitEnabled, settings.KitName);
 
                 npc.gameObject.AddComponent<GuardDestination>().TargetPoint = GetRandomPoint(eventPos, 5f);
-            }, 1f);
+            }, 2f);
         }
 
         void GiveKit(NPCPlayerApex npc, bool kitEnabled, string kitName)
@@ -251,7 +236,7 @@ namespace Oxide.Plugins
 
         void RemoveNPC(NPCPlayerApex npc)
         {
-            if (!npcs.Contains(npc)) return;
+            if (!npcs.Contains(npc))  return;
 
             npcs.Remove(npc);
 
@@ -280,12 +265,12 @@ namespace Oxide.Plugins
 
         void ClearZones()
         {
-            foreach(CH47LandingZone zone in zones)
+            if (landingZone != null)
             {
-                UnityEngine.GameObject.Destroy(zone.gameObject);
+                UnityEngine.GameObject.Destroy(landingZone.gameObject);
             }
 
-            zones.Clear();
+            landingZone = null;
         }
 
         void ClearGuards()
@@ -301,39 +286,33 @@ namespace Oxide.Plugins
             npcs.Clear();
         }
 
-        void ClearFireBalls(Vector3 position)
-        {
-            List<FireBall> fireBalls = new List<FireBall>();
-
-            Vis.Entities(position, 20f, fireBalls);
-
-            foreach (FireBall fireBall in fireBalls)
-            {
-                if (fireBall == null || fireBall.IsDestroyed) continue;
-
-                fireBall.Kill();
-            }
-        }
-
-        void CheckLandingPoint()
+        void GetLandingPoint()
         {
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
                 if (!monument.gameObject.name.Contains("launch_site_1")) continue;
 
-                hasLaunch = true;
-
                 landingRotation = monument.transform.rotation;
                 landingPosition = monument.transform.position + monument.transform.right * 125f;
                 landingPosition.y += 5f;
 
+                chinookRotation = landingRotation;
                 chinookPosition = monument.transform.position + -monument.transform.right * 250f;
                 chinookPosition.y += 150f;
+
+                SetLandingPoint();
             };
+        }
+
+        void SetLandingPoint()
+        {
+            hasLaunch = true;
+
+            landingZone = CreateLandingZone();
         }
         #endregion
 
-        #region Classes
+        #region Component
         class GuardDestination : MonoBehaviour
         {
             NPCPlayerApex npc;
@@ -377,7 +356,7 @@ namespace Oxide.Plugins
                 {
                     if (npc.IsStuck)
                     {
-                        Warp();
+                        DoWarp();
                     }
 
                     if (npc.GetNavAgent == null || !npc.GetNavAgent.isOnNavMesh)
@@ -390,7 +369,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            public void Warp()
+            public void DoWarp()
             {
                 npc.Pause();
                 npc.ServerPosition = TargetPoint;
@@ -416,7 +395,7 @@ namespace Oxide.Plugins
 
         void MessageAll(string key)
         {
-            foreach(BasePlayer player in BasePlayer.activePlayerList.Where(x => x.IsConnected))
+            foreach(BasePlayer player in BasePlayer.activePlayerList)
             {
                 player.ChatMessage(Lang(key, player.UserIDString));
             }
