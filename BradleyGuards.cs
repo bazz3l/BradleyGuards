@@ -38,7 +38,7 @@ namespace Oxide.Plugins
         {
             return new PluginConfig
             {
-                GuardMaxSpawn = 12, // Max is 12
+                GuardMaxSpawn = 9, // Max is 9
                 CrateAmount   = 4,
                 GuardSettings = new List<GuardSetting> {
                     new GuardSetting("Heavy Gunner", 300f)
@@ -152,7 +152,7 @@ namespace Oxide.Plugins
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
 
-            for (int i = 0; i < config.GuardMaxSpawn - 2; i++)
+            for (int i = 0; i < config.GuardMaxSpawn; i++)
             {
                 SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position + (chinook.transform.forward * 10f), position);
             }
