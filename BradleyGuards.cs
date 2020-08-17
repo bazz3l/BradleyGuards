@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.2.3")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.3")]
     [Description("Calls for reinforcements when bradley is destroyed.")]
     class BradleyGuards : RustPlugin
     {
@@ -20,13 +20,13 @@ namespace Oxide.Plugins
 
         HashSet<NPCPlayerApex> npcs = new HashSet<NPCPlayerApex>();
         CH47LandingZone landingZone;
-        PluginConfig config;
         Quaternion landingRotation;
-        Vector3 landingPosition;
         Quaternion chinookRotation;
+        Vector3 landingPosition;
         Vector3 chinookPosition;
         Vector3 bradleyPosition;
         bool hasLaunch;
+        PluginConfig config;
 
         static BradleyGuards plugin;
         #endregion
@@ -72,17 +72,21 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "MaxRange (max distance they will shoot)")]
             public float MaxRange = 150f;
 
+            [JsonProperty(PropertyName = "MaxAggressionRange (max distance they will become agressive)")]
+            public float MaxAggressionRange = 100f;
+
             [JsonProperty(PropertyName = "KitName (custom kit name)")]
             public string KitName = "";
 
             [JsonProperty(PropertyName = "KitEnabled (enable custom kit)")]
             public bool KitEnabled = false;
 
-            public GuardSetting(string name, float health, float maxRoamRadius = 80f)
+            public GuardSetting(string name, float health, float maxRoamRadius = 80f, float maxAggressionRange = 50f)
             {
                 Name = name;
                 Health = health;
                 MaxRoamRadius = maxRoamRadius;
+                MaxAggressionRange = maxAggressionRange;
             }
         }
         #endregion
@@ -91,8 +95,8 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-                {"EventStart", "[<color=#DC143C>Bradley Guards</color>]: Guards are on route, prepare to fight or run for your life."},
-                {"EventEnded", "[<color=#DC143C>Bradley Guards</color>]: Guards down, all clear loot up fast."},
+                {"EventStart", "[<color=#DC143C>Bradley Guards</color>]: Guards are on route, be prepared to fight or run for your life."},
+                {"EventEnded", "[<color=#DC143C>Bradley Guards</color>]: Guards down, get to the loot."},
             }, this);
         }
 
@@ -175,15 +179,15 @@ namespace Oxide.Plugins
 
             npc.Spawn();
 
-            npc.IsInvinsible = false;
             npc.RadioEffect = new GameObjectRef();
+            npc.CommunicationRadius = 0;
+            npc.IsInvinsible = false;
+            npc.displayName = settings.Name;
+            npc.Stats.AggressionRange = settings.MaxAggressionRange;
+            npc.Stats.DeaggroRange = settings.MaxRange * 1f;
+            npc.Stats.MaxRoamRange = settings.MaxRoamRadius;
             npc.startHealth = settings.Health;
             npc.InitializeHealth(settings.Health, settings.Health);
-            npc.CommunicationRadius = 0;
-            npc.displayName = settings.Name;
-            npc.Stats.AggressionRange = settings.MaxRange;
-            npc.Stats.DeaggroRange = settings.MaxRange * 1.125f;
-            npc.Stats.MaxRoamRange = settings.MaxRoamRadius;
             npc.InitFacts();
 
             (npc as Scientist).LootPanelName = settings.Name;
@@ -236,7 +240,10 @@ namespace Oxide.Plugins
 
         void RemoveNPC(NPCPlayerApex npc)
         {
-            if (!npcs.Contains(npc))  return;
+            if (!npcs.Contains(npc))
+            {
+                return;
+            }
 
             npcs.Remove(npc);
 
@@ -339,18 +346,16 @@ namespace Oxide.Plugins
                 }
 
                 CancelInvoke();
-
-                Destroy(this);
             }
 
             void Relocate()
             {
-                float distance = Vector3.Distance(transform.position, TargetPoint);
-
                 if (npc == null || npc.isMounted)
                 {
                     return;
                 }
+
+                float distance = Vector3.Distance(transform.position, TargetPoint);
 
                 if (npc.AttackTarget == null || npc.AttackTarget != null && distance > npc.Stats.MaxRoamRange)
                 {
