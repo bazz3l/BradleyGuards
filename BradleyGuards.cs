@@ -116,7 +116,8 @@ namespace Oxide.Plugins
 
         void OnEntityTakeDamage(BasePlayer player, HitInfo info)
         {
-            if (info?.Initiator is NPCPlayerApex)
+            NPCPlayerApex npc = info?.Initiator as NPCPlayerApex;
+            if (npc != null && npcs.Contains(npc))
             {
                 info.damageTypes.ScaleAll(config.DamageScale);
             }
