@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.3")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.4")]
     [Description("Calls for reinforcements when bradley is destroyed.")]
     class BradleyGuards : RustPlugin
     {
@@ -27,8 +27,6 @@ namespace Oxide.Plugins
         Vector3 bradleyPosition;
         bool hasLaunch;
         PluginConfig config;
-
-        static BradleyGuards plugin;
         #endregion
 
         #region Config
@@ -38,8 +36,8 @@ namespace Oxide.Plugins
         {
             return new PluginConfig
             {
-                GuardMaxSpawn = 9, // Max is 9
-                CrateAmount   = 4,
+                CrateAmount = 4,
+                DamageScale = 0.6f,
                 GuardSettings = new List<GuardSetting> {
                     new GuardSetting("Heavy Gunner", 300f)
                 }
@@ -51,8 +49,8 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "CrateAmount (max amount of crates bradley will spawn)")]
             public int CrateAmount;
 
-            [JsonProperty(PropertyName = "GuardMaxSpawn (max number of guard to spawn note: 11 is max)")]
-            public int GuardMaxSpawn;
+            [JsonProperty(PropertyName = "DamageScale (amount of damage scientists should deal)")]
+            public float DamageScale;
 
             [JsonProperty(PropertyName = "GuardSettings (create different types of guards must contain atleast 1)")]
             public List<GuardSetting> GuardSettings;
@@ -104,8 +102,6 @@ namespace Oxide.Plugins
 
         void Init()
         {
-            plugin = this;
-
             config = Config.ReadObject<PluginConfig>();
         }
 
@@ -116,6 +112,14 @@ namespace Oxide.Plugins
             bradley.maxCratesToSpawn = config.CrateAmount;
 
             ClearGuards();
+        }
+
+        void OnEntityTakeDamage(BasePlayer player, HitInfo info)
+        {
+            if (info?.Initiator is NPCPlayerApex)
+            {
+                info.damageTypes.ScaleAll(config.DamageScale);
+            }
         }
 
         void OnEntityDeath(BradleyAPC bradley, HitInfo info) => SpawnEvent(bradley.transform.position);
@@ -156,7 +160,7 @@ namespace Oxide.Plugins
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
 
-            for (int i = 0; i < config.GuardMaxSpawn; i++)
+            for (int i = 0; i < 11; i++)
             {
                 SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position + (chinook.transform.forward * 10f), position);
             }
