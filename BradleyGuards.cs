@@ -129,15 +129,13 @@ namespace Oxide.Plugins
 
         void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
-            if (npc == null || !npcs.Contains(npc))
+            if (npc != null && npcs.Contains(npc))
             {
-                return;
+                npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
+                npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
+                npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
+                npc.Resume();
             }
-
-            npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
-            npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
-            npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
-            npc.Resume();
         }
         #endregion
 
