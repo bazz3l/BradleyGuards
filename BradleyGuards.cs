@@ -24,7 +24,6 @@ namespace Oxide.Plugins
         Quaternion chinookRotation;
         Vector3 landingPosition;
         Vector3 chinookPosition;
-        Vector3 bradleyPosition;
         bool hasLaunch;
         PluginConfig config;
         #endregion
@@ -38,6 +37,7 @@ namespace Oxide.Plugins
             {
                 ChatIcon = 0,
                 CrateAmount = 4,
+                NPCAmount = 6,
                 DamageScale = 0.6f,
                 GuardSettings = new List<GuardSetting> {
                     new GuardSetting("Heavy Gunner", 300f)
@@ -52,6 +52,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "CrateAmount (max amount of crates bradley will spawn)")]
             public int CrateAmount;
+
+            [JsonProperty(PropertyName = "NPCAmount (max amount of npcs will spawn max 11)")]
+            public int NPCAmount;
 
             [JsonProperty(PropertyName = "DamageScale (amount of damage scientists should deal)")]
             public float DamageScale;
@@ -167,7 +170,7 @@ namespace Oxide.Plugins
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
 
-            for (int i = 0; i < 11; i++)
+            for (int i = 0; i < config.NPCAmount; i++)
             {
                 SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position + (chinook.transform.forward * 10f), position);
             }
