@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.7")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.8")]
     [Description("Calls for reinforcements when bradley is destroyed.")]
     class BradleyGuards : RustPlugin
     {
@@ -52,7 +52,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "ChatIcon (chat icon SteamID64)")]
             public ulong ChatIcon;
 
-            [JsonProperty(PropertyName = "APCHealth (bradley health)")]
+            [JsonProperty(PropertyName = "APCHealth (set starting health)")]
             public float APCHealth;
 
             [JsonProperty(PropertyName = "APCCrates (amount of crates to spawn)")]
@@ -73,19 +73,19 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Name (custom display name)")]
             public string Name;
 
-            [JsonProperty(PropertyName = "Health (adjust the health of a guard)")]
+            [JsonProperty(PropertyName = "Health (set starting health)")]
             public float Health = 100f;
 
             [JsonProperty(PropertyName = "DamageScale (higher the value more damage)")]
             public float DamageScale = 0.2f;
 
-            [JsonProperty(PropertyName = "MaxRoamRadius (max roam radius)")]
+            [JsonProperty(PropertyName = "MaxRoamRadius (max radius guards will roam)")]
             public float MaxRoamRadius;
 
             [JsonProperty(PropertyName = "MaxRange (distance guards can see)")]
             public float MaxRange = 150f;
 
-            [JsonProperty(PropertyName = "MaxAggressionRange (distance guards will become agressive)")]
+            [JsonProperty(PropertyName = "MaxAggressionRange (distance guards will become aggressive)")]
             public float MaxAggressionRange = 100f;
 
             [JsonProperty(PropertyName = "KitName (custom kit name)")]
