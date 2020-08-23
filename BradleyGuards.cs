@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.4")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.5")]
     [Description("Calls for reinforcements when bradley is destroyed.")]
     class BradleyGuards : RustPlugin
     {
@@ -36,6 +36,7 @@ namespace Oxide.Plugins
         {
             return new PluginConfig
             {
+                ChatIcon = 0,
                 CrateAmount = 4,
                 DamageScale = 0.6f,
                 GuardSettings = new List<GuardSetting> {
@@ -46,6 +47,9 @@ namespace Oxide.Plugins
 
         class PluginConfig
         {
+            [JsonProperty(PropertyName = "ChatIcon (chat icon SteamID64)")]
+            public ulong ChatIcon;
+
             [JsonProperty(PropertyName = "CrateAmount (max amount of crates bradley will spawn)")]
             public int CrateAmount;
 
@@ -117,10 +121,12 @@ namespace Oxide.Plugins
         void OnEntityTakeDamage(BasePlayer player, HitInfo info)
         {
             NPCPlayerApex npc = info?.Initiator as NPCPlayerApex;
-            if (npc != null && npcs.Contains(npc))
+            if (npc == null || !npcs.Contains(npc))
             {
-                info.damageTypes.ScaleAll(config.DamageScale);
+                return;
             }
+
+            info.damageTypes.ScaleAll(config.DamageScale);
         }
 
         void OnEntityDeath(BradleyAPC bradley, HitInfo info) => SpawnEvent(bradley.transform.position);
@@ -129,13 +135,15 @@ namespace Oxide.Plugins
 
         void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
-            if (npc != null && npcs.Contains(npc))
+            if (npc == null || !npcs.Contains(npc))
             {
-                npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
-                npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
-                npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
-                npc.Resume();
+                return;
             }
+
+            npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
+            npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
+            npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
+            npc.Resume();
         }
         #endregion
 
@@ -392,6 +400,14 @@ namespace Oxide.Plugins
         #region Helpers
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
+        void MessageAll(string key)
+        {
+            foreach (BasePlayer player in BasePlayer.activePlayerList)
+            {
+                Player.Message(player, Lang(key, player.UserIDString), config.ChatIcon);
+            }
+        }
+
         Vector3 GetRandomPoint(Vector3 position, float radius)
         {
             Vector3 vector = position + UnityEngine.Random.onUnitSphere * radius;
@@ -399,14 +415,6 @@ namespace Oxide.Plugins
             vector.y = TerrainMeta.HeightMap.GetHeight(vector);
 
             return vector;
-        }
-
-        void MessageAll(string key)
-        {
-            foreach(BasePlayer player in BasePlayer.activePlayerList)
-            {
-                player.ChatMessage(Lang(key, player.UserIDString));
-            }
         }
         #endregion
     }
