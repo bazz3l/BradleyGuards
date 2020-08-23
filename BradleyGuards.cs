@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.5")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.6")]
     [Description("Calls for reinforcements when bradley is destroyed.")]
     class BradleyGuards : RustPlugin
     {
@@ -24,6 +24,7 @@ namespace Oxide.Plugins
         Quaternion chinookRotation;
         Vector3 landingPosition;
         Vector3 chinookPosition;
+        Vector3 bradleyPosition;
         bool hasLaunch;
         PluginConfig config;
         #endregion
@@ -38,7 +39,7 @@ namespace Oxide.Plugins
                 ChatIcon = 0,
                 CrateAmount = 4,
                 NPCAmount = 6,
-                DamageScale = 0.6f,
+                InstantCrate = true,
                 GuardSettings = new List<GuardSetting> {
                     new GuardSetting("Heavy Gunner", 300f)
                 }
@@ -56,8 +57,8 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "NPCAmount (max amount of npcs will spawn max 11)")]
             public int NPCAmount;
 
-            [JsonProperty(PropertyName = "DamageScale (amount of damage scientists should deal)")]
-            public float DamageScale;
+            [JsonProperty(PropertyName = "InstantCrate (unlock crate when npcs are eliminated)")]
+            public bool InstantCrate;
 
             [JsonProperty(PropertyName = "GuardSettings (create different types of guards must contain atleast 1)")]
             public List<GuardSetting> GuardSettings;
@@ -70,6 +71,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Health (sets the health of npc)")]
             public float Health = 100f;
+
+            [JsonProperty(PropertyName = "DamageScale (higher the value more damamge)")]
+            public float DamageScale = 0.2f;
 
             [JsonProperty(PropertyName = "MaxRoamRadius (max roam radius)")]
             public float MaxRoamRadius;
@@ -121,20 +125,9 @@ namespace Oxide.Plugins
             ClearGuards();
         }
 
-        void OnEntityTakeDamage(BasePlayer player, HitInfo info)
-        {
-            NPCPlayerApex npc = info?.Initiator as NPCPlayerApex;
-            if (npc == null || !npcs.Contains(npc))
-            {
-                return;
-            }
+        void OnEntityDeath(BradleyAPC bradley, HitInfo info) => OnAPCDeath(bradley);
 
-            info.damageTypes.ScaleAll(config.DamageScale);
-        }
-
-        void OnEntityDeath(BradleyAPC bradley, HitInfo info) => SpawnEvent(bradley.transform.position);
-
-        void OnEntityDeath(NPCPlayerApex npc, HitInfo info) => RemoveNPC(npc);
+        void OnEntityDeath(NPCPlayerApex npc, HitInfo info) => OnNPCDeath(npc);
 
         void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
@@ -151,7 +144,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Core
-        void SpawnEvent(Vector3 position)
+        void SpawnEvent()
         {
             if (!hasLaunch)
             {
@@ -172,12 +165,12 @@ namespace Oxide.Plugins
 
             for (int i = 0; i < config.NPCAmount; i++)
             {
-                SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position + (chinook.transform.forward * 10f), position);
+                SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position + (chinook.transform.forward * 10f), bradleyPosition);
             }
 
             for (int j = 0; j < 1; j++)
             {
-                SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position - (chinook.transform.forward * 5f), position);
+                SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position - (chinook.transform.forward * 5f), bradleyPosition);
             }
 
             MessageAll("EventStart");
@@ -197,6 +190,7 @@ namespace Oxide.Plugins
             npc.CommunicationRadius = 0;
             npc.IsInvinsible = false;
             npc.displayName = settings.Name;
+            npc.damageScale = settings.DamageScale;
             npc.Stats.AggressionRange = settings.MaxAggressionRange;
             npc.Stats.DeaggroRange = settings.MaxRange * 1f;
             npc.Stats.MaxRoamRange = settings.MaxRoamRadius;
@@ -252,7 +246,7 @@ namespace Oxide.Plugins
             return go.GetComponent<NPCPlayerApex>();
         }
 
-        void RemoveNPC(NPCPlayerApex npc)
+        void OnNPCDeath(NPCPlayerApex npc)
         {
             if (!npcs.Contains(npc))
             {
@@ -261,9 +255,48 @@ namespace Oxide.Plugins
 
             npcs.Remove(npc);
 
-            if (npcs.Count == 0)
+            if (npcs.Count > 0)
             {
-                MessageAll("EventEnded");
+                return;
+            }
+
+            if (config.InstantCrate)
+            {
+                UnlockCrates();
+                RemoveFlames();
+            }
+
+            MessageAll("EventEnded");
+        }
+
+        void OnAPCDeath(BradleyAPC bradley)
+        {
+            bradleyPosition = bradley.transform.position;
+
+            SpawnEvent();
+        }
+
+        void UnlockCrates()
+        {
+            List<LockedByEntCrate> items = new List<LockedByEntCrate>();
+
+            Vis.Entities(bradleyPosition, 25f, items);
+
+            foreach(LockedByEntCrate item in items)
+            {
+                item.SetLocked(false);
+            }
+        }
+
+        void RemoveFlames()
+        {
+            List<FireBall> items = new List<FireBall>();
+
+            Vis.Entities(bradleyPosition, 25f, items);
+
+            foreach (FireBall item in items)
+            {
+                item.Kill();
             }
         }
 
