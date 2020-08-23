@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.6")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.7")]
     [Description("Calls for reinforcements when bradley is destroyed.")]
     class BradleyGuards : RustPlugin
     {
@@ -37,7 +37,8 @@ namespace Oxide.Plugins
             return new PluginConfig
             {
                 ChatIcon = 0,
-                CrateAmount = 4,
+                APCHealth = 1000f,
+                APCCrates = 4,
                 NPCAmount = 6,
                 InstantCrate = true,
                 GuardSettings = new List<GuardSetting> {
@@ -51,13 +52,16 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "ChatIcon (chat icon SteamID64)")]
             public ulong ChatIcon;
 
-            [JsonProperty(PropertyName = "CrateAmount (max amount of crates bradley will spawn)")]
-            public int CrateAmount;
+            [JsonProperty(PropertyName = "APCHealth (bradley health)")]
+            public float APCHealth;
 
-            [JsonProperty(PropertyName = "NPCAmount (max amount of npcs will spawn max 11)")]
+            [JsonProperty(PropertyName = "APCCrates (amount of crates to spawn)")]
+            public int APCCrates;
+
+            [JsonProperty(PropertyName = "NPCAmount (amount of guards to spawn max 11)")]
             public int NPCAmount;
 
-            [JsonProperty(PropertyName = "InstantCrate (unlock crate when npcs are eliminated)")]
+            [JsonProperty(PropertyName = "InstantCrate (unlock crate when guards are eliminated)")]
             public bool InstantCrate;
 
             [JsonProperty(PropertyName = "GuardSettings (create different types of guards must contain atleast 1)")]
@@ -66,22 +70,22 @@ namespace Oxide.Plugins
 
         class GuardSetting
         {
-            [JsonProperty(PropertyName = "Name (npc display name)")]
+            [JsonProperty(PropertyName = "Name (custom display name)")]
             public string Name;
 
-            [JsonProperty(PropertyName = "Health (sets the health of npc)")]
+            [JsonProperty(PropertyName = "Health (adjust the health of a guard)")]
             public float Health = 100f;
 
-            [JsonProperty(PropertyName = "DamageScale (higher the value more damamge)")]
+            [JsonProperty(PropertyName = "DamageScale (higher the value more damage)")]
             public float DamageScale = 0.2f;
 
             [JsonProperty(PropertyName = "MaxRoamRadius (max roam radius)")]
             public float MaxRoamRadius;
 
-            [JsonProperty(PropertyName = "MaxRange (max distance they will shoot)")]
+            [JsonProperty(PropertyName = "MaxRange (distance guards can see)")]
             public float MaxRange = 150f;
 
-            [JsonProperty(PropertyName = "MaxAggressionRange (max distance they will become agressive)")]
+            [JsonProperty(PropertyName = "MaxAggressionRange (distance guards will become agressive)")]
             public float MaxAggressionRange = 100f;
 
             [JsonProperty(PropertyName = "KitName (custom kit name)")]
@@ -104,8 +108,8 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-                {"EventStart", "[<color=#DC143C>Bradley Guards</color>]: Guards are on route, be prepared to fight or run for your life."},
-                {"EventEnded", "[<color=#DC143C>Bradley Guards</color>]: Guards down, get to the loot."},
+                {"EventStart", "<color=#DC143C>Bradley Guards</color>: Guards are on route, be prepared to fight or run for your life."},
+                {"EventEnded", "<color=#DC143C>Bradley Guards</color>: Guards down, get to the loot."},
             }, this);
         }
 
@@ -120,7 +124,9 @@ namespace Oxide.Plugins
 
         void OnEntitySpawned(BradleyAPC bradley)
         {
-            bradley.maxCratesToSpawn = config.CrateAmount;
+            bradley.maxCratesToSpawn = config.APCCrates;
+            bradley.startHealth = config.APCHealth;
+            bradley.InitializeHealth(config.APCHealth, config.APCHealth);
 
             ClearGuards();
         }
