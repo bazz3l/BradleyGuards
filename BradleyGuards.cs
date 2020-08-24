@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.9")]
+    [Info("Bradley Guards", "Bazz3l", "1.2.0")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     class BradleyGuards : RustPlugin
     {
@@ -83,11 +83,8 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "MaxRoamRadius (max radius guards will roam)")]
             public float MaxRoamRadius;
 
-            [JsonProperty(PropertyName = "MaxRange (distance guards can see)")]
-            public float MaxRange = 150f;
-
             [JsonProperty(PropertyName = "MaxAggressionRange (distance guards will become aggressive)")]
-            public float MaxAggressionRange = 100f;
+            public float MaxAggressionRange = 200f;
 
             [JsonProperty(PropertyName = "KitName (custom kit name)")]
             public string KitName = "";
@@ -95,7 +92,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "KitEnabled (enable custom kit)")]
             public bool KitEnabled = false;
 
-            public GuardSetting(string name, float health, float maxRoamRadius = 80f, float maxAggressionRange = 50f)
+            public GuardSetting(string name, float health, float maxRoamRadius = 50f, float maxAggressionRange = 120f)
             {
                 Name = name;
                 Health = health;
@@ -181,15 +178,22 @@ namespace Oxide.Plugins
 
             npc.Spawn();
 
+            npc.Mount((BaseMountable)chinook);
+
             npc.RadioEffect = new GameObjectRef();
             npc.CommunicationRadius = 0;
             npc.IsInvinsible = false;
             npc.displayName = settings.Name;
             npc.damageScale = settings.DamageScale;
-            npc.Stats.AggressionRange = settings.MaxAggressionRange;
-            npc.Stats.DeaggroRange = settings.MaxRange * 1f;
-            npc.Stats.MaxRoamRange = settings.MaxRoamRadius;
             npc.startHealth = settings.Health;
+            npc.Stats.VisionRange = settings.MaxAggressionRange + 2f;
+            npc.Stats.DeaggroRange = settings.MaxAggressionRange + 3f;
+            npc.Stats.AggressionRange = settings.MaxAggressionRange + 1f;
+            npc.Stats.LongRange = settings.MaxAggressionRange;
+            npc.Stats.MaxRoamRange = settings.MaxRoamRadius;
+            npc.Stats.Hostility = 1f;
+            npc.Stats.Defensiveness = 1f;
+            npc.Stats.OnlyAggroMarkedTargets = true;
             npc.InitializeHealth(settings.Health, settings.Health);
             npc.InitFacts();
 
@@ -197,12 +201,10 @@ namespace Oxide.Plugins
 
             npcs.Add(npc);
 
-            npc.Mount((BaseMountable)chinook);
-
             npc.Invoke(() => {
                 GiveKit(npc, settings.KitEnabled, settings.KitName);
 
-                npc.gameObject.AddComponent<GuardDestination>().TargetPoint = GetRandomPoint(eventPos, 5f);
+                npc.gameObject.AddComponent<GuardDestination>().TargetPoint = GetRandomPoint(eventPos, 6f);
             }, 2f);
         }
 
@@ -236,8 +238,8 @@ namespace Oxide.Plugins
 
             if (config.InstantCrates)
             {
-                UnlockCrates();
                 RemoveFlames();
+                UnlockCrates();
             }
 
             MessageAll("EventEnded");
@@ -297,10 +299,10 @@ namespace Oxide.Plugins
             }
         }
 
-        CH47LandingZone CreateLandingZone()
+        void CreateLandingZone()
         {
-            return new GameObject(landingName) {
-                layer     = 16,
+            landingZone = new GameObject(landingName) {
+                layer = 16,
                 transform = {
                     position = landingPosition,
                     rotation = landingRotation
@@ -339,7 +341,7 @@ namespace Oxide.Plugins
 
         void GetLandingPoint()
         {
-            foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
+            foreach (MonumentInfo monument in TerrainMeta.Path.Monuments)
             {
                 if (!monument.gameObject.name.Contains("launch_site_1")) continue;
 
@@ -349,7 +351,8 @@ namespace Oxide.Plugins
 
         void SetLandingPoint(MonumentInfo monument)
         {
-            monumentInfo    = monument;
+            monumentInfo = monument;
+
             landingRotation = monumentInfo.transform.rotation;
             landingPosition = monumentInfo.transform.position + monumentInfo.transform.right * 125f;
             landingPosition.y += 5f;
@@ -360,7 +363,7 @@ namespace Oxide.Plugins
 
             hasLaunch = true;
 
-            landingZone = CreateLandingZone();
+            CreateLandingZone();
         }
 
         bool IsInBounds(Vector3 pos)
@@ -405,22 +408,26 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                float distance = Vector3.Distance(transform.position, TargetPoint);
-
-                if (npc.AttackTarget == null || npc.AttackTarget != null && distance > npc.Stats.MaxRoamRange)
+                if (npc.AttackTarget == null || (npc.AttackTarget != null && Vector3.Distance(transform.position, TargetPoint) > npc.Stats.MaxRoamRange))
                 {
                     if (npc.IsStuck)
                     {
                         DoWarp();
                     }
 
+                    npc.NeverMove = true;
+
                     if (npc.GetNavAgent == null || !npc.GetNavAgent.isOnNavMesh)
                         npc.finalDestination = TargetPoint;
                     else
                         npc.GetNavAgent.SetDestination(TargetPoint);
 
-                    npc.IsStopped   = false;
+                    npc.IsStopped = false;
                     npc.Destination = TargetPoint;
+                }
+                else
+                {
+                    npc.NeverMove = false;
                 }
             }
 
@@ -449,11 +456,11 @@ namespace Oxide.Plugins
 
         Vector3 GetRandomPoint(Vector3 position, float radius)
         {
-            Vector3 vector = position + UnityEngine.Random.onUnitSphere * radius;
+            Vector3 pos = position + UnityEngine.Random.onUnitSphere * radius;
 
-            vector.y = TerrainMeta.HeightMap.GetHeight(vector);
+            pos.y = TerrainMeta.HeightMap.GetHeight(pos);
 
-            return vector;
+            return pos;
         }
         #endregion
     }
