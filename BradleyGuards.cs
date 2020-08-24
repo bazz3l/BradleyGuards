@@ -179,11 +179,6 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (npc.gameObject.GetComponent<Spawnable>())
-            {
-                UnityEngine.GameObject.Destroy(npc.gameObject.GetComponent<Spawnable>());
-            }
-
             npc.Spawn();
 
             npc.RadioEffect = new GameObjectRef();
