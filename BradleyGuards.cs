@@ -8,8 +8,8 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.1.8")]
-    [Description("Calls for reinforcements when bradley is destroyed.")]
+    [Info("Bradley Guards", "Bazz3l", "1.1.9")]
+    [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     class BradleyGuards : RustPlugin
     {
         [PluginReference] Plugin Kits;
@@ -25,6 +25,7 @@ namespace Oxide.Plugins
         Vector3 landingPosition;
         Vector3 chinookPosition;
         Vector3 bradleyPosition;
+        MonumentInfo monumentInfo;
         bool hasLaunch;
         PluginConfig config;
         #endregion
@@ -40,7 +41,7 @@ namespace Oxide.Plugins
                 APCHealth = 1000f,
                 APCCrates = 4,
                 NPCAmount = 6,
-                InstantCrate = true,
+                InstantCrates = true,
                 GuardSettings = new List<GuardSetting> {
                     new GuardSetting("Heavy Gunner", 300f)
                 }
@@ -61,8 +62,8 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "NPCAmount (amount of guards to spawn max 11)")]
             public int NPCAmount;
 
-            [JsonProperty(PropertyName = "InstantCrate (unlock crate when guards are eliminated)")]
-            public bool InstantCrate;
+            [JsonProperty(PropertyName = "InstantCrates (unlock crates when guards are eliminated)")]
+            public bool InstantCrates;
 
             [JsonProperty(PropertyName = "GuardSettings (create different types of guards must contain atleast 1)")]
             public List<GuardSetting> GuardSettings;
@@ -122,14 +123,7 @@ namespace Oxide.Plugins
 
         void Unload() => CleanUp();
 
-        void OnEntitySpawned(BradleyAPC bradley)
-        {
-            bradley.maxCratesToSpawn = config.APCCrates;
-            bradley.startHealth = config.APCHealth;
-            bradley.InitializeHealth(config.APCHealth, config.APCHealth);
-
-            ClearGuards();
-        }
+        void OnBradleyApcInitialize(BradleyAPC bradley) => OnAPCInit(bradley);
 
         void OnEntityDeath(BradleyAPC bradley, HitInfo info) => OnAPCDeath(bradley);
 
@@ -152,11 +146,6 @@ namespace Oxide.Plugins
         #region Core
         void SpawnEvent()
         {
-            if (!hasLaunch)
-            {
-                return;
-            }
-
             CH47HelicopterAIController chinook = GameManager.server.CreateEntity(ch47Prefab, chinookPosition, chinookRotation) as CH47HelicopterAIController;
             if (chinook == null)
             {
@@ -184,10 +173,15 @@ namespace Oxide.Plugins
 
         void SpawnScientist(CH47HelicopterAIController chinook, GuardSetting settings, Vector3 position, Vector3 eventPos)
         {
-            NPCPlayerApex npc = InstantiateEntity(position, chinook.scientistPrefab.resourcePath);
+            NPCPlayerApex npc = GameManager.server.CreateEntity(chinook.scientistPrefab.resourcePath, position, default(Quaternion)) as NPCPlayerApex;
             if (npc == null)
             {
                 return;
+            }
+
+            if (npc.gameObject.GetComponent<Spawnable>())
+            {
+                UnityEngine.GameObject.Destroy(npc.gameObject.GetComponent<Spawnable>());
             }
 
             npc.Spawn();
@@ -231,27 +225,6 @@ namespace Oxide.Plugins
             }
         }
 
-        NPCPlayerApex InstantiateEntity(Vector3 position, string prefabName)
-        {
-            GameObject prefab = GameManager.server.FindPrefab(prefabName);
-            GameObject go = Facepunch.Instantiate.GameObject(prefab, position, default(Quaternion));
-            go.name = prefabName;
-
-            SceneManager.MoveGameObjectToScene(go, Rust.Server.EntityScene);
-
-            if (go.GetComponent<Spawnable>())
-            {
-                UnityEngine.GameObject.Destroy(go.GetComponent<Spawnable>());
-            }
-
-            if (!go.activeSelf)
-            {
-                go.SetActive(true);
-            }
-
-            return go.GetComponent<NPCPlayerApex>();
-        }
-
         void OnNPCDeath(NPCPlayerApex npc)
         {
             if (!npcs.Contains(npc))
@@ -266,7 +239,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (config.InstantCrate)
+            if (config.InstantCrates)
             {
                 UnlockCrates();
                 RemoveFlames();
@@ -275,9 +248,32 @@ namespace Oxide.Plugins
             MessageAll("EventEnded");
         }
 
+        void OnAPCInit(BradleyAPC bradley)
+        {
+            Vector3 pos = bradley.transform.position;
+
+            if (!IsInBounds(pos))
+            {
+                return;
+            }
+
+            bradley.maxCratesToSpawn = config.APCCrates;
+            bradley.startHealth      = config.APCHealth;
+            bradley.InitializeHealth(config.APCHealth, config.APCHealth);
+
+            ClearGuards();
+        }
+
         void OnAPCDeath(BradleyAPC bradley)
         {
-            bradleyPosition = bradley.transform.position;
+            Vector3 pos = bradley.transform.position;
+
+            if (!IsInBounds(pos))
+            {
+                return;
+            }
+
+            bradleyPosition = pos;
 
             SpawnEvent();
         }
@@ -288,7 +284,7 @@ namespace Oxide.Plugins
 
             Vis.Entities(bradleyPosition, 25f, items);
 
-            foreach(LockedByEntCrate item in items)
+            foreach (LockedByEntCrate item in items)
             {
                 item.SetLocked(false);
             }
@@ -300,7 +296,7 @@ namespace Oxide.Plugins
 
             Vis.Entities(bradleyPosition, 25f, items);
 
-            foreach (FireBall item in items)
+            foreach(FireBall item in items)
             {
                 item.Kill();
             }
@@ -352,23 +348,29 @@ namespace Oxide.Plugins
             {
                 if (!monument.gameObject.name.Contains("launch_site_1")) continue;
 
-                landingRotation = monument.transform.rotation;
-                landingPosition = monument.transform.position + monument.transform.right * 125f;
-                landingPosition.y += 5f;
-
-                chinookRotation = landingRotation;
-                chinookPosition = monument.transform.position + -monument.transform.right * 250f;
-                chinookPosition.y += 150f;
-
-                SetLandingPoint();
+                SetLandingPoint(monument);
             };
         }
 
-        void SetLandingPoint()
+        void SetLandingPoint(MonumentInfo monument)
         {
+            monumentInfo    = monument;
+            landingRotation = monumentInfo.transform.rotation;
+            landingPosition = monumentInfo.transform.position + monumentInfo.transform.right * 125f;
+            landingPosition.y += 5f;
+
+            chinookRotation = landingRotation;
+            chinookPosition = monumentInfo.transform.position + -monumentInfo.transform.right * 250f;
+            chinookPosition.y += 150f;
+
             hasLaunch = true;
 
             landingZone = CreateLandingZone();
+        }
+
+        bool IsInBounds(Vector3 pos)
+        {
+            return hasLaunch && monumentInfo?.IsInBounds(pos) == true;
         }
         #endregion
 
