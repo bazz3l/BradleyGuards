@@ -273,7 +273,7 @@ namespace Oxide.Plugins
 
             SpawnEvent();
 
-            NextFrame(() => IgnoreFlames());
+            timer.In(10f, () => IgnoreFlames());
         }
 
         void UnlockCrates()
