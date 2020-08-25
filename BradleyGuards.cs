@@ -297,6 +297,7 @@ namespace Oxide.Plugins
             foreach(FireBall item in items)
             {
                 item.ignoreNPC = true;
+                item.canMerge = false;
             }
         }
 
