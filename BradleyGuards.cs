@@ -3,7 +3,6 @@ using System;
 using Oxide.Core.Plugins;
 using Oxide.Core;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using Newtonsoft.Json;
 
 namespace Oxide.Plugins
@@ -92,7 +91,7 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "KitEnabled (enable custom kit)")]
             public bool KitEnabled = false;
 
-            public GuardSetting(string name, float health, float maxRoamRadius = 50f, float maxAggressionRange = 120f)
+            public GuardSetting(string name, float health, float maxRoamRadius = 50f, float maxAggressionRange = 150f)
             {
                 Name = name;
                 Health = health;
