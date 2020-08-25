@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System;
+using Rust;
 using Oxide.Core.Plugins;
 using Oxide.Core;
 using UnityEngine;
@@ -124,6 +125,18 @@ namespace Oxide.Plugins
         void OnEntityDeath(BradleyAPC bradley, HitInfo info) => OnAPCDeath(bradley);
 
         void OnEntityDeath(NPCPlayerApex npc, HitInfo info) => OnNPCDeath(npc);
+
+        void OnFireBallDamage(FireBall fire, NPCPlayerApex npc, HitInfo info)
+        {
+            if (!npcs.Contains(npc))
+            {
+                return;
+            }
+
+            info.damageTypes = new DamageTypeList();
+            info.DoHitEffects = false;
+            info.damageTypes.ScaleAll(0f);
+        }
 
         void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
@@ -272,8 +285,6 @@ namespace Oxide.Plugins
             bradleyPosition = pos;
 
             SpawnEvent();
-
-            timer.In(10f, () => IgnoreFlames());
         }
 
         void UnlockCrates()
@@ -285,19 +296,6 @@ namespace Oxide.Plugins
             foreach (LockedByEntCrate item in items)
             {
                 item.SetLocked(false);
-            }
-        }
-
-        void IgnoreFlames()
-        {
-            List<FireBall> items = new List<FireBall>();
-
-            Vis.Entities(bradleyPosition, 25f, items);
-
-            foreach(FireBall item in items)
-            {
-                item.ignoreNPC = true;
-                item.canMerge = false;
             }
         }
 
