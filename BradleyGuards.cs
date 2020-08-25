@@ -120,7 +120,7 @@ namespace Oxide.Plugins
 
         void Unload() => CleanUp();
 
-        void OnBradleyApcInitialize(BradleyAPC bradley) => OnAPCInit(bradley);
+        void OnEntitySpawned(BradleyAPC bradley) => OnAPCSpawned(bradley);
 
         void OnEntityDeath(BradleyAPC bradley, HitInfo info) => OnAPCDeath(bradley);
 
@@ -257,7 +257,7 @@ namespace Oxide.Plugins
             MessageAll("EventEnded");
         }
 
-        void OnAPCInit(BradleyAPC bradley)
+        void OnAPCSpawned(BradleyAPC bradley)
         {
             Vector3 pos = bradley.transform.position;
 
