@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.2.0")]
+    [Info("Bradley Guards", "Bazz3l", "1.2.1")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     class BradleyGuards : RustPlugin
     {
@@ -22,10 +22,10 @@ namespace Oxide.Plugins
         CH47LandingZone landingZone;
         Quaternion landingRotation;
         Quaternion chinookRotation;
+        Vector3 monumentPosition;
         Vector3 landingPosition;
         Vector3 chinookPosition;
         Vector3 bradleyPosition;
-        MonumentInfo monumentInfo;
         bool hasLaunch;
         PluginConfig config;
         #endregion
@@ -351,14 +351,14 @@ namespace Oxide.Plugins
 
         void SetLandingPoint(MonumentInfo monument)
         {
-            monumentInfo = monument;
+            monumentPosition = monument.transform.position;
 
-            landingRotation = monumentInfo.transform.rotation;
-            landingPosition = monumentInfo.transform.position + monumentInfo.transform.right * 125f;
+            landingRotation = monument.transform.rotation;
+            landingPosition = monument.transform.position + monument.transform.right * 125f;
             landingPosition.y += 5f;
 
             chinookRotation = landingRotation;
-            chinookPosition = monumentInfo.transform.position + -monumentInfo.transform.right * 250f;
+            chinookPosition = monument.transform.position + -monument.transform.right * 250f;
             chinookPosition.y += 150f;
 
             hasLaunch = true;
@@ -366,9 +366,9 @@ namespace Oxide.Plugins
             CreateLandingZone();
         }
 
-        bool IsInBounds(Vector3 pos)
+        bool IsInBounds(Vector3 position)
         {
-            return hasLaunch && monumentInfo?.IsInBounds(pos) == true;
+            return hasLaunch && Vector3.Distance(monumentPosition, position) <= 300;
         }
         #endregion
 
