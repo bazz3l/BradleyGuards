@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.2.1")]
+    [Info("Bradley Guards", "Bazz3l", "1.2.2")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     class BradleyGuards : RustPlugin
     {
@@ -128,7 +128,7 @@ namespace Oxide.Plugins
 
         void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
-            if (npc == null || !npcs.Contains(npc))
+            if (!npcs.Contains(npc))
             {
                 return;
             }
@@ -273,6 +273,8 @@ namespace Oxide.Plugins
             bradleyPosition = pos;
 
             SpawnEvent();
+
+            NextFrame(() => IgnoreFlames());
         }
 
         void UnlockCrates()
@@ -284,6 +286,18 @@ namespace Oxide.Plugins
             foreach (LockedByEntCrate item in items)
             {
                 item.SetLocked(false);
+            }
+        }
+
+        void IgnoreFlames()
+        {
+            List<FireBall> items = new List<FireBall>();
+
+            Vis.Entities(bradleyPosition, 25f, items);
+
+            foreach(FireBall item in items)
+            {
+                item.ignoreNPC = true;
             }
         }
 
@@ -368,7 +382,7 @@ namespace Oxide.Plugins
 
         bool IsInBounds(Vector3 position)
         {
-            return hasLaunch && Vector3.Distance(monumentPosition, position) <= 300;
+            return hasLaunch && Vector3.Distance(monumentPosition, position) <= 300f;
         }
         #endregion
 
