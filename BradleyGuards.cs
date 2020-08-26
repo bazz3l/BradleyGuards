@@ -4,6 +4,7 @@ using Rust;
 using Oxide.Core.Plugins;
 using Oxide.Core;
 using UnityEngine;
+using Facepunch;
 using Newtonsoft.Json;
 
 namespace Oxide.Plugins
@@ -128,7 +129,7 @@ namespace Oxide.Plugins
 
         void OnFireBallDamage(FireBall fire, NPCPlayerApex npc, HitInfo info)
         {
-            if (!npcs.Contains(npc) || info.Initiator is BasePlayer)
+            if (!npcs.Contains(npc) || !(info.Initiator is FireBall))
             {
                 return;
             }
@@ -250,7 +251,6 @@ namespace Oxide.Plugins
 
             if (config.InstantCrates)
             {
-                RemoveFlames();
                 UnlockCrates();
             }
 
@@ -289,26 +289,22 @@ namespace Oxide.Plugins
 
         void UnlockCrates()
         {
-            List<LockedByEntCrate> items = new List<LockedByEntCrate>();
+            List<LockedByEntCrate> entities = Facepunch.Pool.GetList<LockedByEntCrate>();
 
-            Vis.Entities(bradleyPosition, 25f, items);
+            Vis.Entities(bradleyPosition, 25f, entities);
 
-            foreach (LockedByEntCrate item in items)
+            foreach (LockedByEntCrate crate in entities)
             {
-                item.SetLocked(false);
+                crate.SetLocked(false);
+
+                BaseEntity entity = crate?.lockingEnt?.ToBaseEntity();
+                if (entity != null && !entity.IsDestroyed)
+                {
+                    entity.Kill();
+                }
             }
-        }
 
-        void RemoveFlames()
-        {
-            List<FireBall> items = new List<FireBall>();
-
-            Vis.Entities(bradleyPosition, 25f, items);
-
-            foreach(FireBall item in items)
-            {
-                item.Kill();
-            }
+            Pool.FreeList(ref entities);
         }
 
         void CreateLandingZone()
@@ -415,11 +411,6 @@ namespace Oxide.Plugins
 
             void Relocate()
             {
-                if (npc == null || npc.isMounted)
-                {
-                    return;
-                }
-
                 if (npc.AttackTarget == null || (npc.AttackTarget != null && Vector3.Distance(transform.position, TargetPoint) > npc.Stats.MaxRoamRange))
                 {
                     if (npc.IsStuck)
