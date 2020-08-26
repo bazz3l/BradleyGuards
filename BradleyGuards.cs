@@ -251,6 +251,7 @@ namespace Oxide.Plugins
 
             if (config.InstantCrates)
             {
+                RemoveFlames();
                 UnlockCrates();
             }
 
@@ -285,6 +286,23 @@ namespace Oxide.Plugins
             bradleyPosition = pos;
 
             SpawnEvent();
+        }
+
+        void RemoveFlames()
+        {
+            List<FireBall> entities = Facepunch.Pool.GetList<FireBall>();
+
+            Vis.Entities(bradleyPosition, 25f, entities);
+
+            foreach (FireBall fireball in entities)
+            {
+                if (fireball != null && !fireball.IsDestroyed)
+                {
+                    fireball.Kill();
+                }
+            }
+
+            Pool.FreeList(ref entities);
         }
 
         void UnlockCrates()
