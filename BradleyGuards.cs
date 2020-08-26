@@ -128,7 +128,7 @@ namespace Oxide.Plugins
 
         void OnFireBallDamage(FireBall fire, NPCPlayerApex npc, HitInfo info)
         {
-            if (!npcs.Contains(npc))
+            if (!npcs.Contains(npc) || info.Initiator is BasePlayer)
             {
                 return;
             }
