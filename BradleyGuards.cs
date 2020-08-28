@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.2.3")]
+    [Info("Bradley Guards", "Bazz3l", "1.2.4")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     class BradleyGuards : RustPlugin
     {
@@ -444,9 +444,11 @@ namespace Oxide.Plugins
                     if (npc.GetNavAgent == null || !npc.GetNavAgent.isOnNavMesh)
                         npc.finalDestination = TargetPoint;
                     else
+                    {
                         npc.GetNavAgent.SetDestination(TargetPoint);
+                        npc.IsDormant = false;
+                    }
 
-                    npc.IsDormant = false;
                     npc.IsStopped = false;
                     npc.Destination = TargetPoint;
                 }
