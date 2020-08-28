@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.2.2")]
+    [Info("Bradley Guards", "Bazz3l", "1.2.3")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     class BradleyGuards : RustPlugin
     {
@@ -429,6 +429,11 @@ namespace Oxide.Plugins
 
             void Relocate()
             {
+                if (npc == null || npc.isMounted)
+                {
+                    return;
+                }
+
                 if (npc.AttackTarget == null || (npc.AttackTarget != null && Vector3.Distance(transform.position, TargetPoint) > npc.Stats.MaxRoamRange))
                 {
                     if (npc.IsStuck)
@@ -436,23 +441,18 @@ namespace Oxide.Plugins
                         DoWarp();
                     }
 
-                    npc.NeverMove = true;
-
                     if (npc.GetNavAgent == null || !npc.GetNavAgent.isOnNavMesh)
                         npc.finalDestination = TargetPoint;
                     else
                         npc.GetNavAgent.SetDestination(TargetPoint);
 
+                    npc.IsDormant = false;
                     npc.IsStopped = false;
                     npc.Destination = TargetPoint;
                 }
-                else
-                {
-                    npc.NeverMove = false;
-                }
             }
 
-            public void DoWarp()
+            void DoWarp()
             {
                 npc.Pause();
                 npc.ServerPosition = TargetPoint;
