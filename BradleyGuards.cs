@@ -295,10 +295,9 @@ namespace Oxide.Plugins
 
             foreach (FireBall fireball in entities)
             {
-                if (fireball != null && !fireball.IsDestroyed)
-                {
-                    fireball.Kill();
-                }
+                if (fireball == null || fireball.IsDestroyed) continue;
+
+                NextFrame(() => fireball.Kill());
             }
 
             Pool.FreeList(ref entities);
@@ -312,12 +311,18 @@ namespace Oxide.Plugins
 
             foreach (LockedByEntCrate crate in entities)
             {
-                crate.SetLocked(false);
-
-                BaseEntity entity = crate?.lockingEnt?.ToBaseEntity();
-                if (entity != null && !entity.IsDestroyed)
+                if (crate != null && crate.IsValid())
                 {
-                    entity.Kill();
+                    crate.SetLocked(false);
+
+                    if (crate.lockingEnt == null) continue;
+
+                    BaseEntity entity = crate.lockingEnt.GetComponent<BaseEntity>();
+
+                    if (entity != null && entity.IsValid())
+                    {
+                        entity.Kill();
+                    }
                 }
             }
 
@@ -478,12 +483,12 @@ namespace Oxide.Plugins
             {
                 chinook = GetComponent<CH47HelicopterAIController>();
 
-                InvokeRepeating(nameof(CheckLanding), 5f, 5f);
+                InvokeRepeating(nameof(CheckLanded), 5f, 5f);
             }
 
             void OnDestroy() => CancelInvoke();
 
-            void CheckLanding()
+            void CheckLanded()
             {
                 if (chinook == null || chinook.IsDestroyed || chinook.HasAnyPassengers())
                 {
@@ -499,7 +504,7 @@ namespace Oxide.Plugins
 
                 chinook.SetAltitudeProtection(false);
 
-                chinook.ClearLandingTarget();
+                chinook.SetFlag(BaseEntity.Flags.Reserved7, true, false, true);
             }
         }
         #endregion
