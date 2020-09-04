@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.2.4")]
+    [Info("Bradley Guards", "Bazz3l", "1.2.7")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     class BradleyGuards : RustPlugin
     {
@@ -20,6 +20,7 @@ namespace Oxide.Plugins
         const string landingName = "BradleyLandingZone";
 
         HashSet<NPCPlayerApex> npcs = new HashSet<NPCPlayerApex>();
+        CH47HelicopterAIController chinook;
         CH47LandingZone landingZone;
         Quaternion landingRotation;
         Quaternion chinookRotation;
@@ -127,6 +128,8 @@ namespace Oxide.Plugins
 
         void OnEntityDeath(NPCPlayerApex npc, HitInfo info) => OnNPCDeath(npc);
 
+        void OnEntityKill(NPCPlayerApex npc) => OnNPCDeath(npc);
+
         void OnFireBallDamage(FireBall fire, NPCPlayerApex npc, HitInfo info)
         {
             if (!npcs.Contains(npc) || !(info.Initiator is FireBall))
@@ -156,26 +159,22 @@ namespace Oxide.Plugins
         #region Core
         void SpawnEvent()
         {
-            CH47HelicopterAIController chinook = GameManager.server.CreateEntity(ch47Prefab, chinookPosition, chinookRotation) as CH47HelicopterAIController;
-            if (chinook == null)
-            {
-                return;
-            }
-
+            chinook = GameManager.server.CreateEntity(ch47Prefab, new Vector3(0,0,0), new Quaternion(), true) as CH47HelicopterAIController;
+            chinook.transform.position = chinookPosition;
             chinook.SetLandingTarget(landingPosition);
-            chinook.SetMoveTarget(landingPosition);
-            chinook.hoverHeight = 1.5f;
+            chinook.hoverHeight = 1f;
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
+            chinook.gameObject.AddComponent<CustomCH47>();
 
             for (int i = 0; i < config.NPCAmount; i++)
             {
-                SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position + (chinook.transform.forward * 10f), bradleyPosition);
+                SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position + chinook.transform.forward * 10f, bradleyPosition);
             }
 
             for (int j = 0; j < 1; j++)
             {
-                SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position - (chinook.transform.forward * 5f), bradleyPosition);
+                SpawnScientist(chinook, config.GuardSettings.GetRandom(), chinook.transform.position - chinook.transform.forward * 15f, bradleyPosition);
             }
 
             MessageAll("EventStart");
@@ -217,7 +216,7 @@ namespace Oxide.Plugins
             npc.Invoke(() => {
                 GiveKit(npc, settings.KitEnabled, settings.KitName);
 
-                npc.gameObject.AddComponent<GuardDestination>().TargetPoint = GetRandomPoint(eventPos, 6f);
+                npc.gameObject.AddComponent<CustomNavigation>().SetDestination(GetRandomPoint(eventPos, 6f));
             }, 2f);
         }
 
@@ -381,7 +380,7 @@ namespace Oxide.Plugins
 
             landingRotation = monument.transform.rotation;
             landingPosition = monument.transform.position + monument.transform.right * 125f;
-            landingPosition.y += 5f;
+            landingPosition.y = TerrainMeta.HeightMap.GetHeight(landingPosition);
 
             chinookRotation = landingRotation;
             chinookPosition = monument.transform.position + -monument.transform.right * 250f;
@@ -399,10 +398,10 @@ namespace Oxide.Plugins
         #endregion
 
         #region Component
-        class GuardDestination : MonoBehaviour
+        class CustomNavigation : MonoBehaviour
         {
             NPCPlayerApex npc;
-            public Vector3 TargetPoint;
+            Vector3 TargetPoint;
 
             void Awake()
             {
@@ -425,6 +424,11 @@ namespace Oxide.Plugins
                 }
 
                 CancelInvoke();
+            }
+
+            public void SetDestination(Vector3 position)
+            {
+                TargetPoint = position;
             }
 
             void Relocate()
@@ -462,6 +466,40 @@ namespace Oxide.Plugins
                 npc.stuckDuration = 0f;
                 npc.IsStuck = false;
                 npc.Resume();
+            }
+        }
+
+        class CustomCH47 : MonoBehaviour
+        {
+            CH47HelicopterAIController chinook;
+            bool dropped;
+
+            void Awake()
+            {
+                chinook = GetComponent<CH47HelicopterAIController>();
+
+                InvokeRepeating(nameof(CheckLanding), 5f, 5f);
+            }
+
+            void OnDestroy() => CancelInvoke();
+
+            void CheckLanding()
+            {
+                if (chinook == null || chinook.IsDestroyed || chinook.HasAnyPassengers())
+                {
+                    return;
+                }
+
+                if (dropped)
+                {
+                    return;
+                }
+
+                dropped = true;
+
+                chinook.SetAltitudeProtection(false);
+
+                chinook.ClearLandingTarget();
             }
         }
         #endregion
