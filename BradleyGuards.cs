@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.2.7")]
+    [Info("Bradley Guards", "Bazz3l", "1.2.9")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     class BradleyGuards : RustPlugin
     {
@@ -477,7 +477,6 @@ namespace Oxide.Plugins
         class CustomCH47 : MonoBehaviour
         {
             CH47HelicopterAIController chinook;
-            bool dropped;
 
             void Awake()
             {
@@ -494,13 +493,6 @@ namespace Oxide.Plugins
                 {
                     return;
                 }
-
-                if (dropped)
-                {
-                    return;
-                }
-
-                dropped = true;
 
                 chinook.SetAltitudeProtection(false);
 
