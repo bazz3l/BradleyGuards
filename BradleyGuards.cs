@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.2.9")]
+    [Info("Bradley Guards", "Bazz3l", "1.3.0")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     class BradleyGuards : RustPlugin
     {
@@ -132,7 +132,7 @@ namespace Oxide.Plugins
 
         void OnFireBallDamage(FireBall fire, NPCPlayerApex npc, HitInfo info)
         {
-            if (!npcs.Contains(npc) || !(info.Initiator is FireBall))
+            if (!(npcs.Contains(npc) && info.Initiator is FireBall))
             {
                 return;
             }
@@ -152,6 +152,7 @@ namespace Oxide.Plugins
             npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
             npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
             npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
+            npc.modelState.mounted = false;
             npc.Resume();
         }
         #endregion
@@ -162,7 +163,7 @@ namespace Oxide.Plugins
             chinook = GameManager.server.CreateEntity(ch47Prefab, new Vector3(0,0,0), new Quaternion(), true) as CH47HelicopterAIController;
             chinook.transform.position = chinookPosition;
             chinook.SetLandingTarget(landingPosition);
-            chinook.hoverHeight = 1f;
+            chinook.hoverHeight = 1.5f;
             chinook.Spawn();
             chinook.CancelInvoke(new Action(chinook.SpawnScientists));
             chinook.gameObject.AddComponent<CustomCH47>();
@@ -477,15 +478,18 @@ namespace Oxide.Plugins
         class CustomCH47 : MonoBehaviour
         {
             CH47HelicopterAIController chinook;
+            CH47AIBrain brain;
+            bool destroy;
 
             void Awake()
             {
                 chinook = GetComponent<CH47HelicopterAIController>();
+                brain = GetComponent<CH47AIBrain>();
 
                 InvokeRepeating(nameof(CheckLanded), 5f, 5f);
             }
 
-            void OnDestroy() => CancelInvoke();
+            void OnDestroy() => CancelInvoke(nameof(CheckLanded));
 
             void CheckLanded()
             {
@@ -494,9 +498,12 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                chinook.SetAltitudeProtection(false);
+                if (!destroy && brain._currentState == 7)
+                {
+                    destroy = true;
 
-                chinook.SetFlag(BaseEntity.Flags.Reserved7, true, false, true);
+                    chinook.Invoke("DelayedKill", 5f);
+                }
             }
         }
         #endregion
