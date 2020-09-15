@@ -6,6 +6,7 @@ using Oxide.Core;
 using UnityEngine;
 using Facepunch;
 using Newtonsoft.Json;
+using VLB;
 
 namespace Oxide.Plugins
 {
@@ -16,6 +17,8 @@ namespace Oxide.Plugins
         [PluginReference] Plugin Kits;
 
         #region Fields
+        private const string ChairPrefab = "assets/bundled/prefabs/static/chair.invisible.static.prefab";
+        private const string ChutePrefab = "assets/prefabs/misc/parachute/parachute.prefab";
         private const string ScientistPrefab = "assets/prefabs/npc/scientist/scientistjunkpile.prefab";
         private const string Ch47Prefab = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
         private const string LandingName = "BradleyLandingZone";
@@ -36,6 +39,7 @@ namespace Oxide.Plugins
                 APCHealth = 1000f,
                 APCCrates = 4,
                 NPCAmount = 6,
+                ToolTip = true,
                 InstantCrates = true,
                 GuardSettings = new List<GuardSetting> {
                     new GuardSetting("Australian Gunner", 300f),
@@ -177,9 +181,38 @@ namespace Oxide.Plugins
                 return;
             }
 
-            npc.SpawnPosition      = npc.transform.position;
-            npc.modelState.mounted = false;
-            npc.Resume();
+            GiveChute(npc);
+        }
+
+        private void GiveChute(Scientist npc)
+        {
+            if (npc == null)
+            {
+                return;
+            }
+            
+            BaseEntity mount = GameManager.server.CreateEntity(ChairPrefab, npc.transform.position, Quaternion.identity, true);
+            mount.enableSaving = false;
+            
+            var hasstab = mount.GetComponent<StabilityEntity>();
+            if (hasstab) hasstab.grounded = true;
+            
+            var hasmount = mount.GetComponent<BaseMountable>();
+            if (hasmount) hasmount.isMobile = true;
+            
+            mount.skinID = 1311472987;
+            mount?.Spawn();
+            
+            if (mount != null)
+            {
+                BaseEntity parachute = GameManager.server.CreateEntity(ChutePrefab, new Vector3(), new Quaternion(), true);
+                parachute.SetParent(mount, 0);
+                parachute?.Spawn();
+
+                mount.gameObject.GetOrAddComponent<CustomChute>();
+                
+                hasmount.MountPlayer(npc);
+            }
         }
         
         private static void RemoveFlames(Vector3 position)
@@ -253,12 +286,13 @@ namespace Oxide.Plugins
 
         private class BradleyEvent
         {
-            private const float ChinookHoverHeight = 6f;
+            private const float ChinookHoverHeight = 50f;
             public readonly ListHashSet<Scientist> NpcPlayers = new ListHashSet<Scientist>();
             private CH47HelicopterAIController _chinook;
             private CH47LandingZone _landingZone;
             private GuardSetting _guardSettings;
-            private Vector3 _eventPosition;
+            private Vector3 _landingPos;
+            private Vector3 _eventPos;
             private bool _instantCrates;
             private int _maxGuards;
 
@@ -272,8 +306,8 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                _chinook.transform.position = _eventPosition + (Vector3.up * 80);
-                _chinook.SetLandingTarget(_eventPosition);
+                _chinook.transform.position = _landingPos + (Vector3.up * 80);
+                _chinook.SetLandingTarget(_landingPos);
                 _chinook.hoverHeight = ChinookHoverHeight;
                 _chinook.Spawn();
                 _chinook.CancelInvoke(new Action(_chinook.SpawnScientists));
@@ -288,8 +322,8 @@ namespace Oxide.Plugins
             {
                 if (_instantCrates)
                 {
-                    UnlockCrates(_eventPosition);
-                    RemoveFlames(_eventPosition);                    
+                    UnlockCrates(_eventPos);
+                    RemoveFlames(_eventPos);                    
                 }
 
                 Cleanup();
@@ -299,12 +333,16 @@ namespace Oxide.Plugins
 
             public void PrepEvent(Vector3 position, PluginConfig config)
             {
+                _eventPos = position;
+                
                 position.y = TerrainMeta.HeightMap.GetHeight(position) + ChinookHoverHeight;
                 
-                _eventPosition = position;
-                _maxGuards     = config.NPCAmount;
+                _landingPos = position;
+                _maxGuards = config.NPCAmount;
                 _instantCrates = config.InstantCrates;
                 _guardSettings = config.GuardSettings.GetRandom();
+                
+                _instance.Puts("Position: {0}, Guards: {1}, Unlock: {2}", _eventPos, _maxGuards, _instantCrates);
             }
             
             private void Cleanup()
@@ -363,11 +401,7 @@ namespace Oxide.Plugins
             {
                 return new GameObject(LandingName) {
                     layer = 0,
-                    transform =
-                    {
-                        position = _eventPosition, 
-                        rotation = Quaternion.identity
-                    }
+                    transform = { position = _landingPos, rotation = Quaternion.identity }
                 }.AddComponent<CH47LandingZone>();
             }
 
@@ -434,6 +468,70 @@ namespace Oxide.Plugins
 
                     _chinook.Invoke("DelayedKill", 5f);
                 }
+            }
+        }
+        
+        private class CustomChute : MonoBehaviour
+        {
+            private readonly int _layerMask = LayerMask.GetMask("Terrain", "Construction", "World", "Deployable");
+            private BaseMountable _mountable;
+            private BaseEntity _chute;
+
+            private void Awake()
+            {
+                _chute = GetComponentInParent<BaseEntity>();
+                _mountable = _chute.GetComponent<BaseMountable>();
+                
+                if (_chute == null)
+                {
+                    OnDestroy();
+                }
+            }
+
+            private void Update()
+            {
+                if (!IsMounted() || _chute == null)
+                {
+                    OnDestroy();
+                    return;
+                }
+                
+                RaycastHit hit;
+                
+                if (Physics.Raycast(_chute.transform.position, Vector3.down, out hit, 2f, _layerMask))
+                {
+                    OnDestroy();
+                    return;
+                }
+
+                _chute.transform.position = Vector3.MoveTowards(_chute.transform.position, _chute.transform.position + Vector3.down, 5f * Time.deltaTime);
+                _chute.transform.hasChanged = true;
+                _chute.SendNetworkUpdateImmediate();
+                _chute.UpdateNetworkGroup();
+            }
+
+            private void OnDestroy()
+            {
+                if (_chute != null && !_chute.IsDestroyed)
+                {
+                    _chute.Kill();
+                }
+
+                Scientist npc = _mountable.GetMounted() as Scientist;
+                if (npc == null)
+                {
+                    return;
+                }
+
+                npc.Dismount();
+                npc.modelState.mounted = false;
+                npc.modelState.onground = true;
+                npc.Resume();
+            }
+            
+            bool IsMounted()
+            {
+                return _chute.GetComponent<BaseMountable>()?.IsMounted() == true;
             }
         }
         #endregion
