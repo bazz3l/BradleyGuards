@@ -522,10 +522,11 @@ namespace Oxide.Plugins
                 {
                     return;
                 }
-
-                npc.Dismount();
+                
+                npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
+                npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
+                npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
                 npc.modelState.mounted = false;
-                npc.modelState.onground = true;
                 npc.Resume();
             }
             
