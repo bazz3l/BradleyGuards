@@ -12,7 +12,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.3.3")]
+    [Info("Bradley Guards", "Bazz3l", "1.3.4")]
     [Description("Chinook will fly in and drop off guards to protect the bradley loot when destroyed")]
     public class BradleyGuards : RustPlugin
     {
@@ -184,7 +184,7 @@ namespace Oxide.Plugins
             public EventTier Settings;
             public Vector3 EventPosition;
             public Quaternion EventRotation;
-            public bool Extinguish;
+            public bool InstantCrates;
 
             public static EventManager FindEvent(Scientist npc) => Instance.GuardEvents.Find(x => x. NpcApex.Contains(npc));
 
@@ -204,7 +204,7 @@ namespace Oxide.Plugins
                 CleanupLanding();
                 CleanupAI();
 
-                if (Extinguish)
+                if (InstantCrates)
                 {
                     Instance.UnlockCrates(EventPosition);
                     Instance.RemoveFlames(EventPosition);
@@ -388,7 +388,7 @@ namespace Oxide.Plugins
             npcEvent.EventPosition = bradley.transform.position;
             npcEvent.EventRotation = bradley.transform.rotation;
             npcEvent.LandingZone = CH47LandingZone.GetClosest(npcEvent.EventPosition);
-            npcEvent.Extinguish = _config.InstantCrates;
+            npcEvent.InstantCrates = _config.InstantCrates;
             npcEvent.Settings = _config.EventTiers.GetRandom();
             npcEvent.StartEvent();
         }
