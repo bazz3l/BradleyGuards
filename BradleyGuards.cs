@@ -204,8 +204,8 @@ namespace Oxide.Plugins
 
                 if (InstantCrates)
                 {
-                    Instance.UnlockCrates(EventPosition);
-                    Instance.RemoveFlames(EventPosition);
+                    UnlockCrates(EventPosition);
+                    RemoveFlames(EventPosition);
                 }
 
                 Instance.GuardEvents.Remove(this);
@@ -420,7 +420,7 @@ namespace Oxide.Plugins
             yield return null;
         }
 
-        private void RemoveFlames(Vector3 position)
+        private static void RemoveFlames(Vector3 position)
         {
             List<FireBall> entities = Pool.GetList<FireBall>();
 
@@ -436,7 +436,7 @@ namespace Oxide.Plugins
             Pool.FreeList(ref entities);
         }
 
-        private void UnlockCrates(Vector3 position)
+        private static void UnlockCrates(Vector3 position)
         {
             List<LockedByEntCrate> entities = Pool.GetList<LockedByEntCrate>();
 
