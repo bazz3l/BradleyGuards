@@ -6,7 +6,6 @@ using Oxide.Core;
 using Rust;
 using UnityEngine;
 using Newtonsoft.Json;
-using UnityEngine.AI;
 using VLB;
 using Pool = Facepunch.Pool;
 
