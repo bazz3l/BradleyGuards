@@ -5,21 +5,22 @@ using Oxide.Core.Plugins;
 using Oxide.Core;
 using Rust;
 using UnityEngine;
-using Facepunch;
 using Newtonsoft.Json;
 using UnityEngine.AI;
 using VLB;
+using Pool = Facepunch.Pool;
+
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.3.4")]
+    [Info("Bradley Guards", "Bazz3l", "1.3.5")]
     [Description("Chinook will fly in and drop off guards to protect the bradley loot when destroyed")]
     public class BradleyGuards : RustPlugin
     {
         [PluginReference] Plugin Kits;
         
         /*
-         * TODO Make sure landing zone is clear otherwise find point close
+         * TODO Make sure landing zone is clear otherwise find point close for chinook to land
          */
 
         #region Fields
@@ -27,6 +28,7 @@ namespace Oxide.Plugins
         private const string ScientistPrefab = "assets/prefabs/npc/scientist/scientist.prefab";
         private const string Ch47Prefab = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
         private const string LandingName = "BradleyLandingZone";
+        
         private readonly List<EventManager> GuardEvents = new List<EventManager>();
         private PluginConfig _config;
         private static BradleyGuards Instance;
@@ -165,11 +167,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
-            npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
-            npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
-            npc.modelState.mounted = false;
-            npc.Resume();
+            OnNpcDismount(npc);
         }
         
         #endregion
@@ -179,6 +177,7 @@ namespace Oxide.Plugins
         public class EventManager
         {
             private readonly List<Scientist> NpcApex = new List<Scientist>();
+            private readonly List<Vector3> Waypoints = new List<Vector3>();
             private CH47HelicopterAIController Chinook;
             public CH47LandingZone LandingZone;
             public EventTier Settings;
@@ -191,8 +190,9 @@ namespace Oxide.Plugins
             public void StartEvent()
             {
                 CreateLanding();
-                SpawnChinook();
-                
+                CreateWaypoints();
+                SpawnChinook(CreateSpawn());
+
                 Instance.GuardEvents.Add(this);
 
                 Instance.MessageAll("EventStart", Settings.EventName);
@@ -215,9 +215,19 @@ namespace Oxide.Plugins
                 Instance.MessageAll("EventEnded");
             }
 
+            public void CreateWaypoints()
+            {
+                for (int i = 0; i < 30; i++)
+                {
+                    Vector3 position = PositionAround(EventPosition, 2f, i);
+                    
+                    Waypoints.Add(position);
+                }
+            }
+
             private void CreateLanding()
             {
-                EventPosition.y = TerrainMeta.HeightMap.GetHeight(EventPosition);
+                EventPosition.y = TerrainMeta.HeightMap.GetHeight(EventPosition) + 2f;
 
                 LandingZone = new GameObject(LandingName)
                 {
@@ -274,16 +284,16 @@ namespace Oxide.Plugins
                 return spawnPoint;
             }
 
-            private void SpawnChinook()
+            private void SpawnChinook(Vector3 position)
             {
-                Chinook = GameManager.server.CreateEntity(Ch47Prefab, CreateSpawn(), Quaternion.identity) as CH47HelicopterAIController;
+                Chinook = GameManager.server.CreateEntity(Ch47Prefab, position, Quaternion.identity) as CH47HelicopterAIController;
                 if (Chinook == null)
                 {
                     return;
                 }
-                
+
                 Chinook.SetLandingTarget(LandingZone.transform.position);
-                Chinook.hoverHeight = 1.6f;
+                Chinook.hoverHeight = 2f;
                 Chinook.Spawn();
                 Chinook.CancelInvoke(new Action(Chinook.SpawnScientists));
                 Chinook.GetOrAddComponent<Ch47Component>();
@@ -328,14 +338,11 @@ namespace Oxide.Plugins
                 npc.Stats.Hostility = 1f;
                 npc.Stats.Defensiveness = 1f;
                 npc.InitFacts();
+                npc.GetOrAddComponent<NpcComponent>().SetWaypoint(Waypoints.GetRandom());
 
                 NpcApex.Add(npc);
 
-                npc.Invoke(() =>
-                {
-                    SetupComponent(npc, EventPosition);
-                    SetupLoadout(npc, Settings.GuardKitEnabled, Settings.GuardKitName);
-                }, 2f);
+                npc.Invoke(() => SetupLoadout(npc, Settings.GuardKitEnabled, Settings.GuardKitName), 2f);
             }
             
             public void OnNpcDeath(Scientist npc)
@@ -348,17 +355,6 @@ namespace Oxide.Plugins
                 }
 
                 EndEvent();
-            }
-            
-            private void SetupComponent(NPCPlayerApex npc, Vector3 position)
-            {
-                NpcComponent component = npc.GetOrAddComponent<NpcComponent>();
-
-                NavMeshHit navHit;
-
-                NavMesh.SamplePosition(position, out navHit, 6f, Layers.AIPlacement);
-
-                component.SetTarget(navHit.position);
             }
 
             private void SetupLoadout(NPCPlayerApex npc, bool giveKit, string kitName)
@@ -384,10 +380,9 @@ namespace Oxide.Plugins
 
         private void OnApcDeath(BradleyAPC bradley)
         {
-            EventManager npcEvent  = new EventManager();
+            EventManager npcEvent = new EventManager();
             npcEvent.EventPosition = bradley.transform.position;
             npcEvent.EventRotation = bradley.transform.rotation;
-            npcEvent.LandingZone = CH47LandingZone.GetClosest(npcEvent.EventPosition);
             npcEvent.InstantCrates = _config.InstantCrates;
             npcEvent.Settings = _config.EventTiers.GetRandom();
             npcEvent.StartEvent();
@@ -398,6 +393,14 @@ namespace Oxide.Plugins
             EventManager npcEvent = EventManager.FindEvent(npc);
             
             npcEvent?.OnNpcDeath(npc);
+        }
+
+        private void OnNpcDismount(Scientist npc)
+        {
+            npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
+            npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
+            npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
+            npc.Resume();
         }
         
         private void StopEvents()
@@ -486,14 +489,13 @@ namespace Oxide.Plugins
         private class NpcComponent : MonoBehaviour
         {
             private NPCPlayerApex Npc;
-
-            private Vector3 TargetPoint;
+            private Vector3 Destination;
 
             private void Awake()
             {
                 Npc = gameObject.GetComponent<NPCPlayerApex>();
 
-                InvokeRepeating(nameof(Relocate), 0f, 5f);
+                InvokeRepeating(nameof(Relocate), 5f, 5f);
             }
 
             private void Relocate()
@@ -503,7 +505,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                if (Npc.AttackTarget == null || Npc.AttackTarget != null && Vector3.Distance(transform.position, TargetPoint) > Npc.Stats.MaxRoamRange)
+                if (Npc.AttackTarget == null || Npc.AttackTarget != null && Vector3.Distance(transform.position, Destination) > Npc.Stats.MaxRoamRange)
                 {
                     if (Npc.IsStuck)
                     {
@@ -511,31 +513,31 @@ namespace Oxide.Plugins
                     }
 
                     if (Npc.GetNavAgent == null || !Npc.GetNavAgent.isOnNavMesh)
-                        Npc.finalDestination = TargetPoint;
+                        Npc.finalDestination = Destination;
                     else
                     {
-                        Npc.GetNavAgent.SetDestination(TargetPoint);
+                        Npc.GetNavAgent.SetDestination(Destination);
                         Npc.IsDormant = false;
                     }
 
                     Npc.IsStopped = false;
-                    Npc.Destination = TargetPoint;
+                    Npc.Destination = Destination;
                 }
             }
 
             private void DoWarp()
             {
                 Npc.Pause();
-                Npc.ServerPosition = TargetPoint;
-                Npc.GetNavAgent.Warp(TargetPoint);
+                Npc.ServerPosition = Destination;
+                Npc.GetNavAgent.Warp(Destination);
                 Npc.stuckDuration = 0f;
                 Npc.IsStuck = false;
                 Npc.Resume();
             }
 
-            public void SetTarget(Vector3 position)
+            public void SetWaypoint(Vector3 destination)
             {
-                TargetPoint = position;
+                Destination = destination;
             }
         }
 
@@ -553,23 +555,15 @@ namespace Oxide.Plugins
             }
         }
 
-        private void DrawPoint(BasePlayer player, Vector3 point, Color color, float height = 30f, float time = 30)
+        private static Vector3 PositionAround(Vector3 position, float radius, float angle)
         {
-            player.SendConsoleCommand("ddraw.sphere", time, color, point, 1f);
-        }
-
-        private IEnumerator ShowZones(BasePlayer player)
-        {
-            foreach (EventManager manager in GuardEvents)
-            {
-                DrawPoint(player, manager.LandingZone.transform.position, Color.blue);
-                
-                yield return new WaitForSeconds(0.25f);
-            }
+            position.x += radius * Mathf.Sin(angle * Mathf.Deg2Rad);
+            position.z += radius * Mathf.Cos(angle * Mathf.Deg2Rad);
+            position.y = TerrainMeta.HeightMap.GetHeight(position);
             
-            yield return null;
+            return position;
         }
-
+        
         private static bool IsValid(BaseEntity entity)
         {
             if (entity == null || entity.IsDestroyed)
@@ -578,21 +572,6 @@ namespace Oxide.Plugins
             }
 
             return true;
-        }
-        
-        #endregion
-
-        #region Commands
-        
-        [ChatCommand("zones")]
-        private void ZonesCommand(BasePlayer player, string command, string[] args)
-        {
-            if (!player.IsAdmin)
-            {
-                return;
-            }
-
-            CommunityEntity.ServerInstance.StartCoroutine(ShowZones(player));
         }
         
         #endregion
