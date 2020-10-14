@@ -215,11 +215,11 @@ namespace Oxide.Plugins
                 Instance.MessageAll("EventEnded");
             }
 
-            public void CreateWaypoints()
+            private void CreateWaypoints()
             {
                 for (int i = 0; i < 30; i++)
                 {
-                    Vector3 position = PositionAround(EventPosition, 2f, i);
+                    Vector3 position = PositionAround(EventPosition, 5f, i);
                     
                     Waypoints.Add(position);
                 }
@@ -449,6 +449,8 @@ namespace Oxide.Plugins
                 if (!IsValid(crate)) continue;
                 
                 crate.SetLocked(false);
+                
+                if (crate.lockingEnt == null) continue;
 
                 BaseEntity entity = crate.lockingEnt.ToBaseEntity();
 
