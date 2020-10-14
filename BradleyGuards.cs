@@ -9,7 +9,6 @@ using Newtonsoft.Json;
 using VLB;
 using Pool = Facepunch.Pool;
 
-
 namespace Oxide.Plugins
 {
     [Info("Bradley Guards", "Bazz3l", "1.3.5")]
@@ -216,9 +215,9 @@ namespace Oxide.Plugins
 
             private void CreateWaypoints()
             {
-                for (int i = 0; i < 30; i++)
+                for (int i = 0; i < Settings.GuardAmount; i++)
                 {
-                    Vector3 position = PositionAround(EventPosition, 5f, i);
+                    Vector3 position = PositionAround(EventPosition, 5f, (360 / Settings.GuardAmount * i));
                     
                     Waypoints.Add(position);
                 }
