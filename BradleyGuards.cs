@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Collections;
 using System;
+using System.Linq;
 using Oxide.Core.Plugins;
 using Oxide.Core;
 using Rust;
@@ -27,9 +28,9 @@ namespace Oxide.Plugins
         private const string Ch47Prefab = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
         private const string LandingName = "BradleyLandingZone";
         
-        private readonly List<EventManager> GuardEvents = new List<EventManager>();
+        private readonly List<GuardEvent> _guardEvents = new List<GuardEvent>();
         private PluginConfig _config;
-        private static BradleyGuards Instance;
+        private static BradleyGuards _plugin;
         
         #endregion
 
@@ -48,19 +49,28 @@ namespace Oxide.Plugins
                 EventTiers = new List<EventTier> {
                     new EventTier
                     {
-                        EventName = "Heavy Gunners",
-                        GuardName = "Heavy Gunner",
-                        GuardHealth = 300f,
-                        GuardRoamRadius = 50f,
+                        EventName = "Hard Event Gunners",
+                        GuardName = "Gunner",
+                        GuardHealth = 350f,
+                        GuardRoamRadius = 15f,
                         GuardAggressionRange = 150f,
                         GuardAmount = 10
                     },
                     new EventTier
                     {
-                        EventName = "Light Gunners",
-                        GuardName = "Light Gunner",
+                        EventName = "Medium Event Gunners",
+                        GuardName = "Gunner",
+                        GuardHealth = 250f,
+                        GuardRoamRadius = 15f,
+                        GuardAggressionRange = 150f,
+                        GuardAmount = 8
+                    },
+                    new EventTier
+                    {
+                        EventName = "Easy Event Gunners",
+                        GuardName = "Gunner",
                         GuardHealth = 150f,
-                        GuardRoamRadius = 50f,
+                        GuardRoamRadius = 15f,
                         GuardAggressionRange = 150f,
                         GuardAmount = 6
                     }
@@ -130,8 +140,7 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            Instance = this;
-
+            _plugin = this;
             _config = Config.ReadObject<PluginConfig>();
         }
 
@@ -159,7 +168,7 @@ namespace Oxide.Plugins
 
         private void OnEntityDismounted(BaseMountable mountable, Scientist npc)
         {
-            EventManager npcEvent = EventManager.FindEvent(npc);
+            GuardEvent npcEvent = FindEvent(npc);
             if (npcEvent == null)
             {
                 return;
@@ -172,9 +181,9 @@ namespace Oxide.Plugins
 
         #region Core
         
-        public class EventManager
+        public class GuardEvent
         {
-            private readonly List<Scientist> NpcApex = new List<Scientist>();
+            public readonly List<Scientist> NpcApex = new List<Scientist>();
             private readonly List<Vector3> Waypoints = new List<Vector3>();
             private CH47HelicopterAIController Chinook;
             public CH47LandingZone LandingZone;
@@ -183,17 +192,15 @@ namespace Oxide.Plugins
             public Quaternion EventRotation;
             public bool InstantCrates;
 
-            public static EventManager FindEvent(Scientist npc) => Instance.GuardEvents.Find(x => x. NpcApex.Contains(npc));
-
             public void StartEvent()
             {
                 CreateLanding();
                 CreateWaypoints();
                 SpawnChinook(CreateSpawn());
 
-                Instance.GuardEvents.Add(this);
+                _plugin.AddEvent(this);
 
-                Instance.MessageAll("EventStart", Settings.EventName);
+                _plugin.MessageAll("EventStart", Settings.EventName);
             }
 
             public void EndEvent()
@@ -208,9 +215,9 @@ namespace Oxide.Plugins
                     RemoveFlames(EventPosition);
                 }
 
-                Instance.GuardEvents.Remove(this);
+                _plugin.DelEvent(this);
                 
-                Instance.MessageAll("EventEnded");
+                _plugin.MessageAll("EventEnded");
             }
 
             private void CreateWaypoints()
@@ -268,7 +275,7 @@ namespace Oxide.Plugins
                     return;
                 }
                 
-                GameObject.DestroyImmediate(LandingZone.gameObject);
+                UnityEngine.Object.DestroyImmediate(LandingZone.gameObject);
             }
 
             private Vector3 CreateSpawn()
@@ -378,17 +385,17 @@ namespace Oxide.Plugins
 
         private void OnApcDeath(BradleyAPC bradley)
         {
-            EventManager npcEvent = new EventManager();
-            npcEvent.EventPosition = bradley.transform.position;
-            npcEvent.EventRotation = bradley.transform.rotation;
-            npcEvent.InstantCrates = _config.InstantCrates;
-            npcEvent.Settings = _config.EventTiers.GetRandom();
-            npcEvent.StartEvent();
+            GuardEvent guardEvent = new GuardEvent();
+            guardEvent.EventPosition = bradley.transform.position;
+            guardEvent.EventRotation = bradley.transform.rotation;
+            guardEvent.InstantCrates = _config.InstantCrates;
+            guardEvent.Settings = _config.EventTiers.GetRandom();
+            guardEvent.StartEvent();
         }
         
         private void OnNpcDeath(Scientist npc)
         {
-            EventManager npcEvent = EventManager.FindEvent(npc);
+            GuardEvent npcEvent = FindEvent(npc);
             
             npcEvent?.OnNpcDeath(npc);
         }
@@ -401,6 +408,18 @@ namespace Oxide.Plugins
             npc.Resume();
         }
         
+        private GuardEvent FindEvent(Scientist npc) => _guardEvents.Find(x => x.NpcApex.Contains(npc));
+
+        private void AddEvent(GuardEvent guardEvent)
+        {
+            _guardEvents.Add(guardEvent);
+        }
+        
+        private void DelEvent(GuardEvent guardEvent)
+        {
+            _guardEvents.Remove(guardEvent);
+        }
+        
         private void StopEvents()
         {
             CommunityEntity.ServerInstance.StartCoroutine(DespawnRoutine());
@@ -408,9 +427,9 @@ namespace Oxide.Plugins
         
         private IEnumerator DespawnRoutine()
         {
-            for (int i = GuardEvents.Count - 1; i >= 0; i--)
+            for (int i = _guardEvents.Count - 1; i >= 0; i--)
             {
-                EventManager crateEvent = GuardEvents[i];
+                GuardEvent crateEvent = _guardEvents.ElementAt(i);
                 
                 crateEvent.EndEvent();
 
