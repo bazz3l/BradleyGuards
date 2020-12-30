@@ -467,7 +467,7 @@ namespace Oxide.Plugins
 
             private void Relocate()
             {
-                if (!_npc.IsValid() || _npc.IsDestroyed)
+                if (_npc == null || _npc.IsDestroyed)
                 {
                     return;
                 }
