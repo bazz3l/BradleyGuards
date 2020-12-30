@@ -534,7 +534,7 @@ namespace Oxide.Plugins
 
             private void CheckDropped()
             {
-                if (_chinook == null || _chinook.HasAnyPassengers())
+                if (_chinook == null || _chinook.IsDestroyed || _chinook.HasAnyPassengers())
                 {
                     return;
                 }
