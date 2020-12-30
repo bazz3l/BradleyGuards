@@ -57,6 +57,8 @@ namespace Oxide.Plugins
                 LoadDefaultConfig();
                 
                 SaveConfig();
+                
+                PrintWarning("Loaded default configuration file.");
             }
         }
 
@@ -147,7 +149,7 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        private void OnServerInitialized() => GetLandingPoint();
+        private void Loaded() => GetLandingPoint();
 
         private void Unload() => CleanUp();
 
@@ -181,7 +183,6 @@ namespace Oxide.Plugins
             npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
             npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
             npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
-            npc.modelState.mounted = false;
             npc.Resume();
         }
         
@@ -214,7 +215,9 @@ namespace Oxide.Plugins
 
         private void SpawnScientist(CH47HelicopterAIController chinook, GuardSetting settings, Vector3 position, Vector3 eventPos)
         {
-            NPCPlayerApex npc = GameManager.server.CreateEntity(chinook.scientistPrefab.resourcePath, position, Quaternion.identity) as NPCPlayerApex;
+            Quaternion identity = Quaternion.identity;
+            
+            NPCPlayerApex npc = GameManager.server.CreateEntity(chinook.scientistPrefab.resourcePath, position, identity) as NPCPlayerApex;
 
             if (npc == null)
             {
@@ -222,25 +225,23 @@ namespace Oxide.Plugins
             }
             
             npc.Spawn();
+            npc.Mount((BaseMountable) chinook);
             
             npc.RadioEffect = new GameObjectRef();
-            npc.CommunicationRadius = 0;
-            npc.IsInvinsible = false;
+            npc.DeathEffect = new GameObjectRef();
             npc.displayName = settings.Name;
-            npc.damageScale = settings.DamageScale;
             npc.startHealth = settings.Health;
-            npc.Stats.OnlyAggroMarkedTargets = true;
-            npc.Stats.VisionRange = settings.MaxAggressionRange + 2f;
-            npc.Stats.DeaggroRange = settings.MaxAggressionRange + 3f;
+            npc.damageScale = settings.DamageScale;
+            npc.Stats.VisionRange = settings.MaxAggressionRange + 3f;
+            npc.Stats.DeaggroRange = settings.MaxAggressionRange + 2f;
             npc.Stats.AggressionRange = settings.MaxAggressionRange + 1f;
             npc.Stats.LongRange = settings.MaxAggressionRange;
             npc.Stats.MaxRoamRange = settings.MaxRoamRadius;
             npc.Stats.Hostility = 1f;
             npc.Stats.Defensiveness = 1f;
-            
+            npc.Stats.OnlyAggroMarkedTargets = true;
             npc.InitializeHealth(settings.Health, settings.Health);
             npc.InitFacts();
-            npc.Mount(chinook);
 
             (npc as Scientist).LootPanelName = settings.Name;
             
@@ -466,12 +467,17 @@ namespace Oxide.Plugins
 
             private void Relocate()
             {
-                if (_npc == null || _npc.isMounted || _npc.AttackTarget == null)
+                if (!_npc.IsValid() || _npc.IsDestroyed)
                 {
                     return;
                 }
 
-                if (!OutOfBounds())
+                if (_npc.isMounted)
+                {
+                    return;
+                }
+
+                if (!(_npc.AttackTarget == null || IsOutOfBounds()))
                 {
                     return;
                 }
@@ -482,7 +488,7 @@ namespace Oxide.Plugins
                 }
 
                 if (_npc.GetNavAgent == null || !_npc.GetNavAgent.isOnNavMesh)
-                {
+                {    
                     _npc.finalDestination = _targetPoint;
                 }
                 else
@@ -495,10 +501,9 @@ namespace Oxide.Plugins
                 _npc.Destination = _targetPoint;
             }
 
-            private bool OutOfBounds()
+            private bool IsOutOfBounds()
             {
-                return _npc.AttackTarget != null &&
-                       Vector3.Distance(transform.position, _targetPoint) > _npc.Stats.MaxRoamRange;
+                return _npc.AttackTarget != null && Vector3.Distance(transform.position, _targetPoint) > _npc.Stats.MaxRoamRange;
             }
 
             private void DoWarp()
