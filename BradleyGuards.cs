@@ -1,78 +1,90 @@
 using System.Collections.Generic;
-using System.Collections;
-using System;
 using System.Linq;
+using System;
+using Rust;
 using Oxide.Core.Plugins;
 using Oxide.Core;
-using Rust;
 using UnityEngine;
+using Facepunch;
 using Newtonsoft.Json;
-using VLB;
-using Pool = Facepunch.Pool;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.3.5")]
-    [Description("Chinook will fly in and drop off guards to protect the bradley loot when destroyed")]
+    [Info("Bradley Guards", "Bazz3l", "1.3.3")]
+    [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     public class BradleyGuards : RustPlugin
     {
         [PluginReference] Plugin Kits;
-        
-        /*
-         * TODO Make sure landing zone is clear otherwise find point close for chinook to land
-         */
 
         #region Fields
-
-        private const string ScientistPrefab = "assets/prefabs/npc/scientist/scientist.prefab";
+        
         private const string Ch47Prefab = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab";
         private const string LandingName = "BradleyLandingZone";
-        
-        private readonly List<GuardEvent> _guardEvents = new List<GuardEvent>();
+
+        private readonly HashSet<NPCPlayerApex> _npcs = new HashSet<NPCPlayerApex>();
+        private CH47HelicopterAIController _chinook;
+        private CH47LandingZone _landingZone;
+        private Quaternion _landingRotation;
+        private Quaternion _chinookRotation;
+        private Vector3 _monumentPosition;
+        private Vector3 _landingPosition;
+        private Vector3 _chinookPosition;
+        private Vector3 _bradleyPosition;
+        private bool _hasLaunch;
         private PluginConfig _config;
-        private static BradleyGuards _plugin;
         
         #endregion
 
         #region Config
         
-        protected override void LoadDefaultConfig() => Config.WriteObject(GetDefaultConfig(), true);
+        protected override void LoadDefaultConfig() => _config = GetDefaultConfig();
+
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+
+            try
+            {
+                _config = Config.ReadObject<PluginConfig>();
+
+                if (_config == null)
+                {
+                    throw new JsonException();
+                }
+            }
+            catch
+            {
+                LoadDefaultConfig();
+                
+                SaveConfig();
+            }
+        }
+
+        protected override void SaveConfig() => Config.WriteObject(_config, true);
 
         private PluginConfig GetDefaultConfig()
         {
             return new PluginConfig
             {
-                InstantCrates = true,
                 ChatIcon = 0,
-                ApcHealth = 1000f,
-                ApcCrateAmount = 3,
-                EventTiers = new List<EventTier> {
-                    new EventTier
+                APCHealth = 1000f,
+                APCCrates = 4,
+                NPCAmount = 6,
+                InstantCrates = true,
+                GuardSettings = new List<GuardSetting> {
+                    new GuardSetting
                     {
-                        EventName = "Hard Event Gunners",
-                        GuardName = "Gunner",
-                        GuardHealth = 350f,
-                        GuardRoamRadius = 15f,
-                        GuardAggressionRange = 150f,
-                        GuardAmount = 10
+                        Name = "Heavy Gunner",
+                        Health = 300f,
+                        MaxRoamRadius = 80f,
+                        MaxAggressionRange = 200f,
                     },
-                    new EventTier
+                    new GuardSetting
                     {
-                        EventName = "Medium Event Gunners",
-                        GuardName = "Gunner",
-                        GuardHealth = 250f,
-                        GuardRoamRadius = 15f,
-                        GuardAggressionRange = 150f,
-                        GuardAmount = 8
-                    },
-                    new EventTier
-                    {
-                        EventName = "Easy Event Gunners",
-                        GuardName = "Gunner",
-                        GuardHealth = 150f,
-                        GuardRoamRadius = 15f,
-                        GuardAggressionRange = 150f,
-                        GuardAmount = 6
+                        Name = "Light Gunner",
+                        Health = 200f,
+                        MaxRoamRadius = 80f,
+                        MaxAggressionRange = 150f,
                     }
                 }
             };
@@ -80,50 +92,47 @@ namespace Oxide.Plugins
 
         private class PluginConfig
         {
-            [JsonProperty(PropertyName = "InstantCrates (unlock crates when guards are eliminated)")]
-            public bool InstantCrates;
-            
             [JsonProperty(PropertyName = "ChatIcon (chat icon SteamID64)")]
             public ulong ChatIcon;
 
-            [JsonProperty(PropertyName = "ApcHealth (set starting health)")]
-            public float ApcHealth;
-            
-            [JsonProperty(PropertyName = "ApcCrateAmount (amount of crates to spawn)")]
-            public int ApcCrateAmount;
+            [JsonProperty(PropertyName = "APCHealth (set starting health)")]
+            public float APCHealth;
 
-            [JsonProperty(PropertyName = "EventTiers (different types of events that can spawn)")]
-            public List<EventTier> EventTiers;
+            [JsonProperty(PropertyName = "APCCrates (amount of crates to spawn)")]
+            public int APCCrates;
+
+            [JsonProperty(PropertyName = "NPCAmount (amount of guards to spawn max 11)")]
+            public int NPCAmount;
+
+            [JsonProperty(PropertyName = "InstantCrates (unlock crates when guards are eliminated)")]
+            public bool InstantCrates;
+
+            [JsonProperty(PropertyName = "GuardSettings (create different types of guards must contain atleast 1)")]
+            public List<GuardSetting> GuardSettings;
         }
 
-        public class EventTier
+        private class GuardSetting
         {
-            [JsonProperty(PropertyName = "EventName (set the event name to display when event starts)")]
-            public string EventName;
+            [JsonProperty(PropertyName = "Name (custom display name)")]
+            public string Name;
 
-            [JsonProperty(PropertyName = "GuardHealth (health of guard)")]
-            public float GuardHealth = 100f;
+            [JsonProperty(PropertyName = "Health (set starting health)")]
+            public float Health = 100f;
 
-            [JsonProperty(PropertyName = "GuardName (name for guard)")]
-            public string GuardName = "";
-            
-            [JsonProperty(PropertyName = "GuardDamageScale (damage scale of guard)")]
-            public float GuardDamageScale = 0.2f;
+            [JsonProperty(PropertyName = "DamageScale (higher the value more damage)")]
+            public float DamageScale = 0.2f;
 
-            [JsonProperty(PropertyName = "GuardRoamRadius (max radius guard will roam)")]
-            public float GuardRoamRadius;
+            [JsonProperty(PropertyName = "MaxRoamRadius (max radius guards will roam)")]
+            public float MaxRoamRadius = 30f;
 
-            [JsonProperty(PropertyName = "GuardAggressionRange (distance a guard will become aggressive)")]
-            public float GuardAggressionRange = 200f;
+            [JsonProperty(PropertyName = "MaxAggressionRange (distance guards will become aggressive)")]
+            public float MaxAggressionRange = 200f;
 
             [JsonProperty(PropertyName = "KitName (custom kit name)")]
-            public string GuardKitName = "";
+            public string KitName = "";
 
             [JsonProperty(PropertyName = "KitEnabled (enable custom kit)")]
-            public bool GuardKitEnabled = false;
-
-            [JsonProperty(PropertyName = "GuardAmount (amount of guards to spawn max 11)")]
-            public int GuardAmount;
+            public bool KitEnabled = false;
         }
         
         #endregion
@@ -133,30 +142,26 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-                {"EventStart", "<color=#DC143C>Bradley Guards</color>: {0} in route, defend the loot."},
-                {"EventEnded", "<color=#DC143C>Bradley Guards</color>: All guards down loot up fast."},
+                {"EventStart", "<color=#DC143C>Bradley Guards</color>: Guards are on route, be prepared to fight or run for your life."},
+                {"EventEnded", "<color=#DC143C>Bradley Guards</color>: Guards down, get to the loot."},
             }, this);
         }
 
-        private void Init()
+        private void OnServerInitialized() => GetLandingPoint();
+
+        private void Unload() => CleanUp();
+
+        private void OnEntitySpawned(BradleyAPC bradley) => OnAPCSpawned(bradley);
+
+        private void OnEntityDeath(BradleyAPC bradley, HitInfo info) => OnAPCDeath(bradley);
+
+        private void OnEntityDeath(NPCPlayerApex npc, HitInfo info) => OnNPCDeath(npc);
+
+        private void OnEntityKill(NPCPlayerApex npc) => OnNPCDeath(npc);
+
+        private void OnFireBallDamage(FireBall fire, NPCPlayerApex npc, HitInfo info)
         {
-            _plugin = this;
-            _config = Config.ReadObject<PluginConfig>();
-        }
-
-        private void Unload() => StopEvents();
-
-        private void OnEntitySpawned(BradleyAPC bradley) => OnApcSpawned(bradley);
-
-        private void OnEntityDeath(BradleyAPC bradley, HitInfo info) => OnApcDeath(bradley);
-
-        private void OnEntityDeath(Scientist npc, HitInfo info) => OnNpcDeath(npc);
-
-        private void OnEntityKill(Scientist npc) => OnNpcDeath(npc);
-
-        private void OnFireBallDamage(FireBall fire, Scientist npc, HitInfo info)
-        {
-            if (info == null || !(info.Initiator is FireBall))
+            if (!(_npcs.Contains(npc) && info.Initiator is FireBall))
             {
                 return;
             }
@@ -166,431 +171,395 @@ namespace Oxide.Plugins
             info.damageTypes.ScaleAll(0f);
         }
 
-        private void OnEntityDismounted(BaseMountable mountable, Scientist npc)
+        private void OnEntityDismounted(BaseMountable mountable, NPCPlayerApex npc)
         {
-            GuardEvent npcEvent = FindEvent(npc);
-            if (npcEvent == null)
+            if (!_npcs.Contains(npc))
             {
                 return;
             }
 
-            OnNpcDismount(npc);
+            npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
+            npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
+            npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
+            npc.modelState.mounted = false;
+            npc.Resume();
         }
         
         #endregion
 
         #region Core
         
-        public class GuardEvent
+        private void SpawnEvent()
         {
-            public readonly List<Scientist> NpcApex = new List<Scientist>();
-            private readonly List<Vector3> Waypoints = new List<Vector3>();
-            private CH47HelicopterAIController Chinook;
-            public CH47LandingZone LandingZone;
-            public EventTier Settings;
-            public Vector3 EventPosition;
-            public Quaternion EventRotation;
-            public bool InstantCrates;
+            _chinook = GameManager.server.CreateEntity(Ch47Prefab, _chinookPosition, Quaternion.identity) as CH47HelicopterAIController;
+            _chinook.SetLandingTarget(_landingPosition);
+            _chinook.hoverHeight = 1.5f;
+            _chinook.Spawn();
+            _chinook.CancelInvoke(new Action(_chinook.SpawnScientists));
+            
+            _chinook.gameObject.AddComponent<CustomCh47>();
 
-            public void StartEvent()
+            for (int i = 0; i < _config.NPCAmount - 1; i++)
             {
-                CreateLanding();
-                CreateWaypoints();
-                SpawnChinook(CreateSpawn());
-
-                _plugin.AddEvent(this);
-
-                _plugin.MessageAll("EventStart", Settings.EventName);
+                SpawnScientist(_chinook, _config.GuardSettings.GetRandom(), _chinook.transform.position + _chinook.transform.forward * 10f, _bradleyPosition);
             }
 
-            public void EndEvent()
+            for (int j = 0; j < 1; j++)
             {
-                CleanupChinook();
-                CleanupLanding();
-                CleanupAI();
-
-                if (InstantCrates)
-                {
-                    UnlockCrates(EventPosition);
-                    RemoveFlames(EventPosition);
-                }
-
-                _plugin.DelEvent(this);
-                
-                _plugin.MessageAll("EventEnded");
+                SpawnScientist(_chinook, _config.GuardSettings.GetRandom(), _chinook.transform.position - _chinook.transform.forward * 15f, _bradleyPosition);
             }
 
-            private void CreateWaypoints()
-            {
-                for (int i = 0; i < Settings.GuardAmount; i++)
-                {
-                    Vector3 position = PositionAround(EventPosition, 5f, (360 / Settings.GuardAmount * i));
-                    
-                    Waypoints.Add(position);
-                }
-            }
+            MessageAll("EventStart");
+        }
 
-            private void CreateLanding()
-            {
-                EventPosition.y = TerrainMeta.HeightMap.GetHeight(EventPosition) + 2f;
+        private void SpawnScientist(CH47HelicopterAIController chinook, GuardSetting settings, Vector3 position, Vector3 eventPos)
+        {
+            NPCPlayerApex npc = GameManager.server.CreateEntity(chinook.scientistPrefab.resourcePath, position, Quaternion.identity) as NPCPlayerApex;
 
-                LandingZone = new GameObject(LandingName)
-                {
-                    layer = 0,
-                    transform = {
-                        position = EventPosition,
-                        rotation = EventRotation
-                    }
-                }.AddComponent<CH47LandingZone>();
-            }
-
-            private void CleanupChinook()
+            if (npc == null)
             {
-                if (!IsValid(Chinook))
-                {
-                    return;
-                }
-                
-                Chinook.Kill();
+                return;
             }
             
-            private void CleanupAI()
-            {
-                List<Scientist> npcList = new List<Scientist>(NpcApex);
-                
-                foreach (Scientist npc in  npcList)
-                {
-                    if (!IsValid(npc)) continue;
-                    
-                    npc.Kill();
-                }
-                
-                npcList.Clear();
-            }
+            npc.Spawn();
             
-            private void CleanupLanding()
-            {
-                if (LandingZone == null)
-                {
-                    return;
-                }
-                
-                UnityEngine.Object.DestroyImmediate(LandingZone.gameObject);
-            }
-
-            private Vector3 CreateSpawn()
-            {
-                Vector3 zero = Vector3.zero;
-                zero.y = LandingZone.transform.position.y;
-                Vector3 vector2d = Vector3Ex.Direction2D(LandingZone.transform.position, zero);
-                Vector3 spawnPoint = LandingZone.transform.position + vector2d * 300f;
-                spawnPoint.y = TerrainMeta.HeightMap.GetHeight(LandingZone.transform.position) + 200f;
-
-                return spawnPoint;
-            }
-
-            private void SpawnChinook(Vector3 position)
-            {
-                Chinook = GameManager.server.CreateEntity(Ch47Prefab, position, Quaternion.identity) as CH47HelicopterAIController;
-                if (Chinook == null)
-                {
-                    return;
-                }
-
-                Chinook.SetLandingTarget(LandingZone.transform.position);
-                Chinook.hoverHeight = 2f;
-                Chinook.Spawn();
-                Chinook.CancelInvoke(new Action(Chinook.SpawnScientists));
-                Chinook.GetOrAddComponent<Ch47Component>();
-                
-                for (int i = 0; i < Settings.GuardAmount - 1; i++)
-                {
-                    SpawnNpc(Chinook.transform.position + Chinook.transform.forward * 10f);
-                }
-
-                for (int j = 0; j < 1; j++)
-                {
-                    SpawnNpc(Chinook.transform.position - Chinook.transform.forward * 15f);
-                }
-            }
-
-            private void SpawnNpc(Vector3 position)
-            {
-                Scientist npc = GameManager.server.CreateEntity(ScientistPrefab, position, Quaternion.identity) as Scientist;
-                if (npc == null)
-                {
-                    return;
-                }
-
-                npc.enableSaving = false;
-                npc.SetMaxHealth(Settings.GuardHealth);
-                npc.Spawn();
-                npc.Mount(Chinook);
-                
-                npc.Stats.OnlyAggroMarkedTargets = false;
-                npc.RadioEffect = new GameObjectRef();
-                npc.DeathEffect = new GameObjectRef();
-                npc.CommunicationRadius = 0;
-                npc.displayName = Settings.GuardName;
-                npc.LootPanelName = Settings.GuardName;
-                npc.damageScale = Settings.GuardDamageScale;
-                npc.startHealth = Settings.GuardHealth;
-                npc.Stats.MaxRoamRange = Settings.GuardRoamRadius;
-                npc.Stats.AggressionRange = Settings.GuardAggressionRange + 1f;
-                npc.Stats.VisionRange = npc.Stats.AggressionRange + 2f;
-                npc.Stats.DeaggroRange = npc.Stats.AggressionRange + 3f;
-                npc.Stats.LongRange = npc.Stats.AggressionRange;
-                npc.Stats.Hostility = 1f;
-                npc.Stats.Defensiveness = 1f;
-                npc.InitFacts();
-                npc.GetOrAddComponent<NpcComponent>().SetWaypoint(Waypoints.GetRandom());
-
-                NpcApex.Add(npc);
-
-                npc.Invoke(() => SetupLoadout(npc, Settings.GuardKitEnabled, Settings.GuardKitName), 2f);
-            }
+            npc.RadioEffect = new GameObjectRef();
+            npc.CommunicationRadius = 0;
+            npc.IsInvinsible = false;
+            npc.displayName = settings.Name;
+            npc.damageScale = settings.DamageScale;
+            npc.startHealth = settings.Health;
+            npc.Stats.OnlyAggroMarkedTargets = true;
+            npc.Stats.VisionRange = settings.MaxAggressionRange + 2f;
+            npc.Stats.DeaggroRange = settings.MaxAggressionRange + 3f;
+            npc.Stats.AggressionRange = settings.MaxAggressionRange + 1f;
+            npc.Stats.LongRange = settings.MaxAggressionRange;
+            npc.Stats.MaxRoamRange = settings.MaxRoamRadius;
+            npc.Stats.Hostility = 1f;
+            npc.Stats.Defensiveness = 1f;
             
-            public void OnNpcDeath(Scientist npc)
+            npc.InitializeHealth(settings.Health, settings.Health);
+            npc.InitFacts();
+            npc.Mount(chinook);
+
+            (npc as Scientist).LootPanelName = settings.Name;
+            
+            _npcs.Add(npc);
+
+            npc.Invoke(() => {
+                GiveKit(npc, settings.KitEnabled, settings.KitName);
+
+                npc.gameObject.AddComponent<CustomNavigation>().SetDestination(GetRandomPoint(eventPos, 6f));
+            }, 2f);
+        }
+
+        private void GiveKit(NPCPlayerApex npc, bool kitEnabled, string kitName)
+        {
+            if (kitEnabled)
             {
-                NpcApex.Remove(npc);
-
-                if (NpcApex.Count > 0)
-                {
-                    return;
-                }
-
-                EndEvent();
-            }
-
-            private void SetupLoadout(NPCPlayerApex npc, bool giveKit, string kitName)
-            {
-                if (!giveKit)
-                {
-                    ItemManager.CreateByName("scientistsuit_heavy", 1, 0)?.MoveToContainer(npc.inventory.containerWear);
-                    return;
-                }
-                
                 npc.inventory.Strip();
-            
-                Interface.Oxide.CallHook("GiveKit", npc, kitName);                
+
+                Interface.Oxide.CallHook("GiveKit", npc, kitName);
             }
-        }
-
-        private void OnApcSpawned(BradleyAPC bradley)
-        {
-            bradley.maxCratesToSpawn = _config.ApcCrateAmount;
-            bradley.SetHealth(_config.ApcHealth);
-            bradley.InitializeHealth(_config.ApcHealth, _config.ApcHealth);
-        }
-
-        private void OnApcDeath(BradleyAPC bradley)
-        {
-            GuardEvent guardEvent = new GuardEvent();
-            guardEvent.EventPosition = bradley.transform.position;
-            guardEvent.EventRotation = bradley.transform.rotation;
-            guardEvent.InstantCrates = _config.InstantCrates;
-            guardEvent.Settings = _config.EventTiers.GetRandom();
-            guardEvent.StartEvent();
-        }
-        
-        private void OnNpcDeath(Scientist npc)
-        {
-            GuardEvent npcEvent = FindEvent(npc);
-            
-            npcEvent?.OnNpcDeath(npc);
-        }
-
-        private void OnNpcDismount(Scientist npc)
-        {
-            npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
-            npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
-            npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
-            npc.Resume();
-        }
-        
-        private GuardEvent FindEvent(Scientist npc) => _guardEvents.Find(x => x.NpcApex.Contains(npc));
-
-        private void AddEvent(GuardEvent guardEvent)
-        {
-            _guardEvents.Add(guardEvent);
-        }
-        
-        private void DelEvent(GuardEvent guardEvent)
-        {
-            _guardEvents.Remove(guardEvent);
-        }
-        
-        private void StopEvents()
-        {
-            CommunityEntity.ServerInstance.StartCoroutine(DespawnRoutine());
-        }
-        
-        private IEnumerator DespawnRoutine()
-        {
-            for (int i = _guardEvents.Count - 1; i >= 0; i--)
+            else
             {
-                GuardEvent crateEvent = _guardEvents.ElementAt(i);
-                
-                crateEvent.EndEvent();
-
-                yield return new WaitForSeconds(0.25f);
+                ItemManager.CreateByName("scientistsuit_heavy", 1, 0)?.MoveToContainer(npc.inventory.containerWear);
             }
-            
-            yield return null;
         }
 
-        private static void RemoveFlames(Vector3 position)
+        private void OnNPCDeath(NPCPlayerApex npc)
+        {
+            if (!_npcs.Remove(npc))
+            {
+                return;
+            }
+
+            if (_npcs.Count > 0)
+            {
+                return;
+            }
+
+            if (_config.InstantCrates)
+            {
+                RemoveFlames();
+                UnlockCrates();
+            }
+
+            MessageAll("EventEnded");
+        }
+
+        private void OnAPCSpawned(BradleyAPC bradley)
+        {
+            Vector3 pos = bradley.transform.position;
+            
+            if (!IsInBounds(pos))
+            {
+                return;
+            }
+
+            bradley.maxCratesToSpawn = _config.APCCrates;
+            bradley.startHealth = _config.APCHealth;
+            bradley._maxHealth = _config.APCHealth;
+            
+            ClearGuards();
+        }
+
+        private void OnAPCDeath(BradleyAPC bradley)
+        {
+            Vector3 pos = bradley.ServerPosition;
+            
+            if (!IsInBounds(pos))
+            {
+                return;
+            }
+
+            _bradleyPosition = pos;
+
+            SpawnEvent();
+        }
+
+        private void RemoveFlames()
         {
             List<FireBall> entities = Pool.GetList<FireBall>();
 
-            Vis.Entities(position, 25f, entities);
+            Vis.Entities(_bradleyPosition, 25f, entities);
 
             foreach (FireBall fireball in entities)
             {
-                if (!IsValid(fireball)) continue;
-                
-                fireball.Kill();
+                if (!(fireball.IsValid() && !fireball.IsDestroyed)) continue;
+
+                NextFrame(() => fireball.Kill());
             }
 
             Pool.FreeList(ref entities);
         }
 
-        private static void UnlockCrates(Vector3 position)
+        private void UnlockCrates()
         {
             List<LockedByEntCrate> entities = Pool.GetList<LockedByEntCrate>();
 
-            Vis.Entities(position, 25f, entities);
+            Vis.Entities(_bradleyPosition, 25f, entities);
 
             foreach (LockedByEntCrate crate in entities)
             {
-                if (!IsValid(crate)) continue;
+                if (!(crate.IsValid() && !crate.IsDestroyed)) continue;
                 
                 crate.SetLocked(false);
-                
+
                 if (crate.lockingEnt == null) continue;
 
-                BaseEntity entity = crate.lockingEnt.ToBaseEntity();
+                BaseEntity entity = crate.lockingEnt.GetComponent<BaseEntity>();
 
-                if (!IsValid(entity)) continue;
-                
-                entity.Kill();
+                if (entity.IsValid() && !entity.IsDestroyed)
+                {
+                    entity.Kill();
+                }
             }
 
             Pool.FreeList(ref entities);
         }
 
+        private void CreateLandingZone()
+        {
+            _landingZone = new GameObject(LandingName) {
+                layer = 16,
+                transform = {
+                    position = _landingPosition,
+                    rotation = _landingRotation
+                }
+            }.AddComponent<CH47LandingZone>();
+        }
+
+        private void CleanUp()
+        {
+            ClearGuards();
+            ClearZones();
+        }
+
+        private void ClearZones()
+        {
+            if (_landingZone != null)
+            {
+                UnityEngine.Object.Destroy(_landingZone.gameObject);
+            }
+
+            _landingZone = null;
+        }
+
+        private void ClearGuards()
+        {
+            for (int i = 0; i < _npcs.Count; i++)
+            {
+                NPCPlayerApex npc = _npcs.ElementAt(i);
+                
+                if (npc.IsValid() && !npc.IsDestroyed)
+                {
+                    npc.Kill();
+                }
+            }
+
+            _npcs.Clear();
+        }
+
+        private void GetLandingPoint()
+        {
+            foreach (MonumentInfo monument in TerrainMeta.Path.Monuments)
+            {
+                if (!monument.gameObject.name.Contains("launch_site_1")) continue;
+
+                SetLandingPoint(monument);
+            };
+        }
+
+        private void SetLandingPoint(MonumentInfo monument)
+        {
+            _monumentPosition = monument.transform.position;
+
+            _landingRotation = monument.transform.rotation;
+            _landingPosition = monument.transform.position + monument.transform.right * 125f;
+            _landingPosition.y = TerrainMeta.HeightMap.GetHeight(_landingPosition);
+
+            _chinookRotation = _landingRotation;
+            _chinookPosition = monument.transform.position + -monument.transform.right * 250f;
+            _chinookPosition.y += 150f;
+
+            _hasLaunch = true;
+
+            CreateLandingZone();
+        }
+
+        private bool IsInBounds(Vector3 position)
+        {
+            return _hasLaunch && Vector3.Distance(_monumentPosition, position) <= 300f;
+        }
+        
         #endregion
 
         #region Component
         
-        private class Ch47Component : MonoBehaviour
+        private class CustomNavigation : MonoBehaviour
         {
-            private CH47HelicopterAIController Chinook;
+            private NPCPlayerApex _npc;
+            private Vector3 _targetPoint;
 
             private void Awake()
             {
-                Chinook = gameObject.GetComponent<CH47HelicopterAIController>();
+                _npc = gameObject.GetComponent<NPCPlayerApex>();
 
-                InvokeRepeating(nameof(Despawn), 5f, 5f);
+                InvokeRepeating(nameof(Relocate), 0f, 5f);
             }
 
-            private void Despawn()
+            private void OnDestroy()
             {
-                if (Chinook == null || Chinook.IsDestroyed || Chinook.HasAnyPassengers())
+                if (_npc.IsValid() && !_npc.IsDestroyed)
                 {
-                    return;
+                    _npc.Kill();
                 }
 
-                Chinook.Kill();
+                CancelInvoke();
             }
-        }
-        
-        private class NpcComponent : MonoBehaviour
-        {
-            private NPCPlayerApex Npc;
-            private Vector3 Destination;
 
-            private void Awake()
+            public void SetDestination(Vector3 position)
             {
-                Npc = gameObject.GetComponent<NPCPlayerApex>();
-
-                InvokeRepeating(nameof(Relocate), 5f, 5f);
+                _targetPoint = position;
             }
 
             private void Relocate()
             {
-                if (Npc == null || Npc.IsDestroyed || Npc.isMounted)
+                if (_npc == null || _npc.isMounted || _npc.AttackTarget == null)
                 {
                     return;
                 }
 
-                if (Npc.AttackTarget == null || Npc.AttackTarget != null && Vector3.Distance(transform.position, Destination) > Npc.Stats.MaxRoamRange)
+                if (!OutOfBounds())
                 {
-                    if (Npc.IsStuck)
-                    {
-                        DoWarp();
-                    }
-
-                    if (Npc.GetNavAgent == null || !Npc.GetNavAgent.isOnNavMesh)
-                        Npc.finalDestination = Destination;
-                    else
-                    {
-                        Npc.GetNavAgent.SetDestination(Destination);
-                        Npc.IsDormant = false;
-                    }
-
-                    Npc.IsStopped = false;
-                    Npc.Destination = Destination;
+                    return;
                 }
+                
+                if (_npc.IsStuck)
+                {
+                    DoWarp();
+                }
+
+                if (_npc.GetNavAgent == null || !_npc.GetNavAgent.isOnNavMesh)
+                {
+                    _npc.finalDestination = _targetPoint;
+                }
+                else
+                {
+                    _npc.GetNavAgent.SetDestination(_targetPoint);
+                    _npc.IsDormant = false;
+                }
+
+                _npc.IsStopped = false;
+                _npc.Destination = _targetPoint;
+            }
+
+            private bool OutOfBounds()
+            {
+                return _npc.AttackTarget != null &&
+                       Vector3.Distance(transform.position, _targetPoint) > _npc.Stats.MaxRoamRange;
             }
 
             private void DoWarp()
             {
-                Npc.Pause();
-                Npc.ServerPosition = Destination;
-                Npc.GetNavAgent.Warp(Destination);
-                Npc.stuckDuration = 0f;
-                Npc.IsStuck = false;
-                Npc.Resume();
-            }
-
-            public void SetWaypoint(Vector3 destination)
-            {
-                Destination = destination;
+                _npc.Pause();
+                _npc.ServerPosition = _targetPoint;
+                _npc.GetNavAgent.Warp(_targetPoint);
+                _npc.stuckDuration = 0f;
+                _npc.IsStuck = false;
+                _npc.Resume();
             }
         }
 
+        private class CustomCh47 : MonoBehaviour
+        {
+            private CH47HelicopterAIController _chinook;
+            private CH47AIBrain _brain;
+
+            private void Awake()
+            {
+                _chinook = GetComponent<CH47HelicopterAIController>();
+                _brain = GetComponent<CH47AIBrain>();
+
+                InvokeRepeating(nameof(CheckDropped), 5f, 5f);
+            }
+
+            private void OnDestroy() => CancelInvoke();
+
+            private void CheckDropped()
+            {
+                if (_chinook == null || _chinook.HasAnyPassengers())
+                {
+                    return;
+                }
+
+                if (_brain._currentState != 7)
+                {
+                    return;
+                }
+                
+                _chinook.Invoke(_chinook.DelayedKill, 5f);
+                
+                Destroy(this);
+            }
+        }
+        
         #endregion
 
         #region Helpers
         
         private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        private void MessageAll(string key, params object[] args)
-        {
-            foreach (BasePlayer player in BasePlayer.activePlayerList)
-            {
-                Player.Message(player, Lang(key, player.UserIDString, args), _config.ChatIcon);
-            }
-        }
+        private void MessageAll(string key) => Server.Broadcast(Lang(key, null), _config.ChatIcon);
 
-        private static Vector3 PositionAround(Vector3 position, float radius, float angle)
+        private Vector3 GetRandomPoint(Vector3 position, float radius)
         {
-            position.x += radius * Mathf.Sin(angle * Mathf.Deg2Rad);
-            position.z += radius * Mathf.Cos(angle * Mathf.Deg2Rad);
-            position.y = TerrainMeta.HeightMap.GetHeight(position);
+            Vector3 pos = position + UnityEngine.Random.onUnitSphere * radius;
             
-            return position;
-        }
-        
-        private static bool IsValid(BaseEntity entity)
-        {
-            if (entity == null || entity.IsDestroyed)
-            {
-                return false;
-            }
-
-            return true;
+            pos.y = TerrainMeta.HeightMap.GetHeight(pos);
+            
+            return pos;
         }
         
         #endregion
