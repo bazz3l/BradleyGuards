@@ -7,6 +7,7 @@ using Oxide.Core;
 using UnityEngine;
 using Facepunch;
 using Newtonsoft.Json;
+using VLB;
 
 namespace Oxide.Plugins
 {
@@ -143,8 +144,8 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-                {"EventStart", "<color=#DC143C>Bradley Reinforcements</color>: The tank commander has sent for reinforcements, fight for your life."},
-                {"EventEnded", "<color=#DC143C>Bradley Reinforcements</color>: Reinforcements have been eliminated, loot up fast."},
+                {"EventStart", "<color=#DC143C>Bradley Gaurds</color>: The tank commander has sent for reinforcements, fight for your life."},
+                {"EventEnded", "<color=#DC143C>Bradley Gaurds</color>: Reinforcements have been eliminated, loot up fast."},
             }, this);
         }
 
@@ -192,11 +193,11 @@ namespace Oxide.Plugins
         private void SpawnEvent()
         {
             _chinook = GameManager.server.CreateEntity(Ch47Prefab, _chinookPosition, Quaternion.identity) as CH47HelicopterAIController;
-            _chinook.SetLandingTarget(_landingPosition);
-            _chinook.hoverHeight = 1.5f;
             _chinook.Spawn();
+            _chinook.SetLandingTarget(_landingPosition);
+            _chinook.SetMinHoverHeight(1.5f);
             _chinook.CancelInvoke(new Action(_chinook.SpawnScientists));
-            _chinook.gameObject.AddComponent<CustomCh47>();
+            _chinook.GetOrAddComponent<CustomCh47>();
 
             for (int i = 0; i < _config.NPCAmount - 1; i++)
             {
@@ -523,7 +524,12 @@ namespace Oxide.Plugins
                 InvokeRepeating(nameof(CheckDropped), 5f, 5f);
             }
 
-            private void OnDestroy() => CancelInvoke();
+            private void OnDestroy()
+            {
+                CancelInvoke();
+                
+                _chinook.Invoke(new Action(_chinook.DelayedKill), 10f);
+            }
 
             private void CheckDropped()
             {
@@ -531,9 +537,7 @@ namespace Oxide.Plugins
                 {
                     return;
                 }
-                
-                _chinook.Invoke(new Action(_chinook.DelayedKill), 10f);
-                
+
                 Destroy(this);
             }
         }
