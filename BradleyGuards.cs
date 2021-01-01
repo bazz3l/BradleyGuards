@@ -10,7 +10,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.3.3")]
+    [Info("Bradley Guards", "Bazz3l", "1.3.4")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     public class BradleyGuards : RustPlugin
     {
@@ -25,7 +25,6 @@ namespace Oxide.Plugins
         private CH47HelicopterAIController _chinook;
         private CH47LandingZone _landingZone;
         private Quaternion _landingRotation;
-        private Quaternion _chinookRotation;
         private Vector3 _monumentPosition;
         private Vector3 _landingPosition;
         private Vector3 _chinookPosition;
@@ -144,12 +143,12 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-                {"EventStart", "<color=#DC143C>Bradley Guards</color>: Guards are on route, be prepared to fight or run for your life."},
-                {"EventEnded", "<color=#DC143C>Bradley Guards</color>: Guards down, get to the loot."},
+                {"EventStart", "<color=#DC143C>Bradley Reinforcements</color>: The tank commander has sent for reinforcements, fight for your life."},
+                {"EventEnded", "<color=#DC143C>Bradley Reinforcements</color>: Reinforcements have been eliminated, loot up fast."},
             }, this);
         }
 
-        private void Loaded() => GetLandingPoint();
+        private void OnServerInitialized() => GetLandingPoint();
 
         private void Unload() => CleanUp();
 
@@ -189,7 +188,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Core
-        
+
         private void SpawnEvent()
         {
             _chinook = GameManager.server.CreateEntity(Ch47Prefab, _chinookPosition, Quaternion.identity) as CH47HelicopterAIController;
@@ -197,7 +196,6 @@ namespace Oxide.Plugins
             _chinook.hoverHeight = 1.5f;
             _chinook.Spawn();
             _chinook.CancelInvoke(new Action(_chinook.SpawnScientists));
-            
             _chinook.gameObject.AddComponent<CustomCh47>();
 
             for (int i = 0; i < _config.NPCAmount - 1; i++)
@@ -215,10 +213,8 @@ namespace Oxide.Plugins
 
         private void SpawnScientist(CH47HelicopterAIController chinook, GuardSetting settings, Vector3 position, Vector3 eventPos)
         {
-            Quaternion identity = Quaternion.identity;
+            NPCPlayerApex npc = GameManager.server.CreateEntity(chinook.scientistPrefab.resourcePath, position, Quaternion.identity) as NPCPlayerApex;
             
-            NPCPlayerApex npc = GameManager.server.CreateEntity(chinook.scientistPrefab.resourcePath, position, identity) as NPCPlayerApex;
-
             if (npc == null)
             {
                 return;
@@ -256,16 +252,16 @@ namespace Oxide.Plugins
 
         private void GiveKit(NPCPlayerApex npc, bool kitEnabled, string kitName)
         {
-            if (kitEnabled)
+            if (kitEnabled && !string.IsNullOrEmpty(kitName))
             {
                 npc.inventory.Strip();
-
+                
                 Interface.Oxide.CallHook("GiveKit", npc, kitName);
+                
+                return;
             }
-            else
-            {
-                ItemManager.CreateByName("scientistsuit_heavy", 1, 0)?.MoveToContainer(npc.inventory.containerWear);
-            }
+
+            ItemManager.CreateByName("scientistsuit_heavy", 1, 0)?.MoveToContainer(npc.inventory.containerWear);
         }
 
         private void OnNPCDeath(NPCPlayerApex npc)
@@ -419,8 +415,7 @@ namespace Oxide.Plugins
             _landingRotation = monument.transform.rotation;
             _landingPosition = monument.transform.position + monument.transform.right * 125f;
             _landingPosition.y = TerrainMeta.HeightMap.GetHeight(_landingPosition);
-
-            _chinookRotation = _landingRotation;
+            
             _chinookPosition = monument.transform.position + -monument.transform.right * 250f;
             _chinookPosition.y += 150f;
 
@@ -452,12 +447,12 @@ namespace Oxide.Plugins
 
             private void OnDestroy()
             {
+                CancelInvoke();
+                
                 if (_npc.IsValid() && !_npc.IsDestroyed)
                 {
                     _npc.Kill();
                 }
-
-                CancelInvoke();
             }
 
             public void SetDestination(Vector3 position)
@@ -520,12 +515,10 @@ namespace Oxide.Plugins
         private class CustomCh47 : MonoBehaviour
         {
             private CH47HelicopterAIController _chinook;
-            private CH47AIBrain _brain;
 
             private void Awake()
             {
                 _chinook = GetComponent<CH47HelicopterAIController>();
-                _brain = GetComponent<CH47AIBrain>();
 
                 InvokeRepeating(nameof(CheckDropped), 5f, 5f);
             }
@@ -538,13 +531,8 @@ namespace Oxide.Plugins
                 {
                     return;
                 }
-
-                if (_brain._currentState != 7)
-                {
-                    return;
-                }
                 
-                _chinook.Invoke(_chinook.DelayedKill, 5f);
+                _chinook.Invoke(new Action(_chinook.DelayedKill), 10f);
                 
                 Destroy(this);
             }
