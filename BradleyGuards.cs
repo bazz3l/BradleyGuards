@@ -296,7 +296,8 @@ namespace Oxide.Plugins
             }
             
             bradley.maxCratesToSpawn = _config.APCCrates;
-            bradley.SetMaxHealth(_config.APCHealth);
+            bradley._maxHealth = bradley._health = _config.APCHealth;
+            bradley.health = bradley._maxHealth;
 
             ClearGuards();
         }
