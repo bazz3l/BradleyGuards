@@ -144,7 +144,7 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-                {"EventStart", "<color=#DC143C>Bradley Gaurds</color>: The tank commander has sent for reinforcements, fight for your life."},
+                {"EventStart", "<color=#DC143C>Bradley Gaurds</color>: Tank commander sent for reinforcements, fight for your life."},
                 {"EventEnded", "<color=#DC143C>Bradley Gaurds</color>: Reinforcements have been eliminated, loot up fast."},
             }, this);
         }
