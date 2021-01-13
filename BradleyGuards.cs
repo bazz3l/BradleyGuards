@@ -11,7 +11,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.3.4")]
+    [Info("Bradley Guards", "Bazz3l", "1.3.6")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     public class BradleyGuards : RustPlugin
     {
@@ -288,30 +288,34 @@ namespace Oxide.Plugins
 
         private void OnAPCSpawned(BradleyAPC bradley)
         {
-            Vector3 pos = bradley.transform.position;
+            Vector3 position = bradley.transform.position;
             
-            if (!IsInBounds(pos))
+            if (!IsInBounds(position))
             {
                 return;
             }
-
-            bradley.maxCratesToSpawn = _config.APCCrates;
-            bradley.startHealth = _config.APCHealth;
-            bradley._maxHealth = _config.APCHealth;
             
+            bradley.maxCratesToSpawn = _config.APCCrates;
+            bradley.SetMaxHealth(_config.APCHealth);
+
             ClearGuards();
         }
 
         private void OnAPCDeath(BradleyAPC bradley)
         {
-            Vector3 pos = bradley.ServerPosition;
-            
-            if (!IsInBounds(pos))
+            if (bradley == null || bradley.IsDestroyed)
             {
                 return;
             }
 
-            _bradleyPosition = pos;
+            Vector3 position = bradley.transform.position;
+            
+            if (!IsInBounds(position))
+            {
+                return;
+            }
+
+            _bradleyPosition = position;
 
             SpawnEvent();
         }
@@ -401,12 +405,12 @@ namespace Oxide.Plugins
 
         private void GetLandingPoint()
         {
-            foreach (MonumentInfo monument in TerrainMeta.Path.Monuments)
+            foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
                 if (!monument.gameObject.name.Contains("launch_site_1")) continue;
 
                 SetLandingPoint(monument);
-            };
+            }
         }
 
         private void SetLandingPoint(MonumentInfo monument)
