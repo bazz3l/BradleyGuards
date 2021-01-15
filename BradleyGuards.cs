@@ -11,7 +11,7 @@ using VLB;
 
 namespace Oxide.Plugins
 {
-    [Info("Bradley Guards", "Bazz3l", "1.3.6")]
+    [Info("Bradley Guards", "Bazz3l", "1.3.7")]
     [Description("Calls reinforcements when bradley is destroyed at launch site.")]
     public class BradleyGuards : RustPlugin
     {
@@ -144,8 +144,8 @@ namespace Oxide.Plugins
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string> {
-                {"EventStart", "<color=#DC143C>Bradley Gaurds</color>: Tank commander sent for reinforcements, fight for your life."},
-                {"EventEnded", "<color=#DC143C>Bradley Gaurds</color>: Reinforcements have been eliminated, loot up fast."},
+                {"EventStart", "<color=#DC143C>Bradley Guards</color>: Tank commander sent for reinforcements, fight for your life."},
+                {"EventEnded", "<color=#DC143C>Bradley Guards</color>: Reinforcements have been eliminated, loot up fast."},
             }, this);
         }
 
@@ -181,7 +181,7 @@ namespace Oxide.Plugins
             }
 
             npc.SetFact(NPCPlayerApex.Facts.IsMounted, (byte) 0, true, true);
-            npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 0, true, true);
+            npc.SetFact(NPCPlayerApex.Facts.WantsToDismount, (byte) 1, true, true);
             npc.SetFact(NPCPlayerApex.Facts.CanNotWieldWeapon, (byte) 0, true, true);
             npc.Resume();
         }
@@ -192,10 +192,10 @@ namespace Oxide.Plugins
 
         private void SpawnEvent()
         {
-            _chinook = GameManager.server.CreateEntity(Ch47Prefab, _chinookPosition, Quaternion.identity) as CH47HelicopterAIController;
-            _chinook.Spawn();
+            _chinook = GameManager.server.CreateEntity(Ch47Prefab, _chinookPosition, Quaternion.identity).GetComponent<CH47HelicopterAIController>();
             _chinook.SetLandingTarget(_landingPosition);
-            _chinook.SetMinHoverHeight(1.5f);
+            _chinook.hoverHeight = 2f;
+            _chinook.Spawn();
             _chinook.CancelInvoke(new Action(_chinook.SpawnScientists));
             _chinook.GetOrAddComponent<CustomCh47>();
 
@@ -214,16 +214,9 @@ namespace Oxide.Plugins
 
         private void SpawnScientist(CH47HelicopterAIController chinook, GuardSetting settings, Vector3 position, Vector3 eventPos)
         {
-            NPCPlayerApex npc = GameManager.server.CreateEntity(chinook.scientistPrefab.resourcePath, position, Quaternion.identity) as NPCPlayerApex;
-            
-            if (npc == null)
-            {
-                return;
-            }
-            
+            NPCPlayerApex npc = GameManager.server.CreateEntity(chinook.scientistPrefab.resourcePath, position, Quaternion.identity).GetComponent<NPCPlayerApex>();
             npc.Spawn();
             npc.Mount((BaseMountable) chinook);
-            
             npc.RadioEffect = new GameObjectRef();
             npc.DeathEffect = new GameObjectRef();
             npc.displayName = settings.Name;
@@ -243,11 +236,11 @@ namespace Oxide.Plugins
             (npc as Scientist).LootPanelName = settings.Name;
             
             _npcs.Add(npc);
-
+            
             npc.Invoke(() => {
                 GiveKit(npc, settings.KitEnabled, settings.KitName);
-
-                npc.gameObject.AddComponent<CustomNavigation>().SetDestination(GetRandomPoint(eventPos, 6f));
+                
+                npc.GetOrAddComponent<CustomNavigation>().SetDestination(GetRandomPoint(_bradleyPosition, 1.5f));
             }, 2f);
         }
 
@@ -308,7 +301,7 @@ namespace Oxide.Plugins
             {
                 return;
             }
-
+            
             Vector3 position = bradley.transform.position;
             
             if (!IsInBounds(position))
@@ -365,7 +358,7 @@ namespace Oxide.Plugins
         private void CreateLandingZone()
         {
             _landingZone = new GameObject(LandingName) {
-                layer = 16,
+                layer = (int)Layer.Reserved1,
                 transform = {
                     position = _landingPosition,
                     rotation = _landingRotation
@@ -420,7 +413,7 @@ namespace Oxide.Plugins
 
             _landingRotation = monument.transform.rotation;
             _landingPosition = monument.transform.position + monument.transform.right * 125f;
-            _landingPosition.y = TerrainMeta.HeightMap.GetHeight(_landingPosition);
+            _landingPosition.y = TerrainMeta.HeightMap.GetHeight(_landingPosition) + 2f;
             
             _chinookPosition = monument.transform.position + -monument.transform.right * 250f;
             _chinookPosition.y += 150f;
@@ -532,8 +525,8 @@ namespace Oxide.Plugins
             private void OnDestroy()
             {
                 CancelInvoke();
-                
-                _chinook.Invoke(new Action(_chinook.DelayedKill), 10f);
+
+                _chinook.Invoke(_chinook.DelayedKill, 5f);
             }
 
             private void CheckDropped()
